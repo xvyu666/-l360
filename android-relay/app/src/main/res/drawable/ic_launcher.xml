@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 矢量图标：打印机轮廓 + 出纸。免二进制文件，仓库里好管理 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M10,6 h28 a4,4 0 0 1 4,4 v6 h-36 v-6 a4,4 0 0 1 4,-4 z" />
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M8,18 h32 a6,6 0 0 1 6,6 v12 a4,4 0 0 1 -4,4 h-4 v-8 h-32 v8 h-4 a4,4 0 0 1 -4,-4 v-12 a6,6 0 0 1 6,-6 z" />
+    <path
+        android:fillColor="#8AB4F8"
+        android:pathData="M12,28 h24 v14 a2,2 0 0 1 -2,2 h-20 a2,2 0 0 1 -2,-2 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,32 h16 v2.5 h-16 z M16,36 h12 v2.5 h-12 z" />
+</vector>

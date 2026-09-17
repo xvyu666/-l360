@@ -1,0 +1,4 @@
+// 顶层构建脚本。极简项目，没有公共逻辑，只声明插件版本。
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

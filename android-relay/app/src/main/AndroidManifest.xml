@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 上传到电脑打印服务要走局域网 HTTP -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 9 及以下写公共 Download 目录需要；10+ 用 MediaStore 不需要 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/AppTheme">
+
+        <!-- 设置页（点图标打开） -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            分享接收页：注册 SEND / SEND_MULTIPLE，mimeType=*/*
+            有了这个 filter，微信/浏览器/相册/WPS 的分享列表里就会出现「打印中转」。
+            exported 必须显式写 true（targetSdk 31+ 的硬要求）。
+            注意：SEND_MULTIPLE 只接得到流（图片/文件），纯文字分享走 SEND+EXTRA_TEXT。
+        -->
+        <activity
+            android:name=".ReceiveActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

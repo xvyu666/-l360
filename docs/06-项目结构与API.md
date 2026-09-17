@@ -11,6 +11,9 @@
 | `native.py` | Office COM 原格式直印 | Word/Excel/PPT 的 `PrintOut` |
 | `office.py` | Office COM 小工具 | 转 PDF 等 |
 | `wechat.py` | 微信本地数据扫描 | `scan()` / `scan_images()` / `image_sessions()` / `status()` / `resolve()` |
+| `inbox.py` | 手机中转收件箱 | `add()` / `items()` / `resolve()` / `remove()` / `clear()`，落在 `runtime/inbox/` |
+| `notes.py` | 笔记存储 | `save()` / `items()` / `cats()` / `load()`，一份笔记一个 json |
+| `htmlnote.py` | 笔记 HTML 渲染 | `make_note_source()` → `NoteSource`，支持标题/粗斜体/列表/引用/分割线 |
 | `selftest.py` | 不耗材自检 | 见 [02](02-源码部署.md) |
 | `setup.py` | 防火墙 + 开机自启 | 需管理员权限 |
 | `build_portable.py` | 打便携版 | 见 [05](05-便携版打包.md) |
@@ -50,6 +53,11 @@
 | `/api/wechat/images` | 微信图片列表（带清晰度评级与建议纸张） |
 | `/api/wechat/sessions` | 图片所属会话列表（用于筛选） |
 | `/api/wechat/thumb/<fid>` | 图片缩略图 |
+| `/api/inbox/list` | 手机中转收件箱列表（新的在前） |
+| `/api/inbox/thumb/<id>` | 收件箱图片缩略图 |
+| `/api/notes/list` | 笔记列表（`?cat=` 按分类过滤） |
+| `/api/notes/cats` | 分类清单 + 每类篇数 |
+| `/api/notes/get/<id>` | 笔记全文（含 HTML） |
 
 ### POST
 
@@ -61,6 +69,13 @@
 | `/api/compose` | 提交拼版打印任务 |
 | `/api/testpage` | 打一张测试页 |
 | `/api/wechat/import` | 把选中的微信文件复制成作业 |
+| `/api/inbox/upload` | 安卓中转 APP 上传：body=文件字节，`X-File-Name` 头带文件名 |
+| `/api/inbox/import` | `{"ids":[...]}` 把收件箱文件复制成作业 |
+| `/api/inbox/remove` | `{"ids":[...]}` 删除收件箱文件 |
+| `/api/inbox/clear` | 清空收件箱 |
+| `/api/notes/save` | 新建/更新笔记（有 `id` 就更新），自动生成标题与摘要 |
+| `/api/notes/remove` | `{"id":...}` 删除笔记 |
+| `/api/note` | `{"id":...}` 把笔记加入打印队列（kind=note，走 htmlnote 渲染） |
 | `/api/printer` | 记住选择的打印机（写 `runtime/config.json`） |
 
 ### DELETE

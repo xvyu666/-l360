@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页用系统 Material 浅色主题，不引 AndroidX -->
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- 分享接收页：全透明，收完就退，用户只会看到一个 Toast -->
+    <style name="Translucent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+</resources>

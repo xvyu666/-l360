@@ -32,7 +32,8 @@ NEED_PKG = [
 NEED_FILE = ["pywin32.pth"]
 NEED_PY = [
     "server.py", "printer_core.py", "renderer.py", "layout.py",
-    "native.py", "wechat.py", "office.py", "selftest.py",
+    "native.py", "wechat.py", "office.py", "selftest.py", "inbox.py",
+    "notes.py", "htmlnote.py",
 ]
 SKIP_EXT = {".pyc", ".pyo"}
 SKIP_DIR = {"__pycache__", ".git", ".idea", "logs"}

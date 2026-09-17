@@ -27,6 +27,9 @@ import printer_core as PC
 import renderer as RD
 import layout as LY
 import wechat as WX
+import inbox as IB
+import notes as NT
+import htmlnote as HN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -67,6 +70,11 @@ _config = {}
 def ensure_dirs():
     for d in (RUNTIME, JOBS):
         os.makedirs(d, exist_ok=True)
+    try:
+        IB.ensure()          # 手机中转收件箱
+        NT.ensure()          # 笔记
+    except Exception:
+        pass
 
 
 def log(msg: str):
@@ -191,6 +199,9 @@ def new_job(name: str, kind: str, source_path: str, pages: int,
 
 
 def source_of(job: dict):
+    if job["kind"] == "note":
+        # 笔记正文是 HTML，走 htmlnote 自己排版（支持标题/粗体/列表）
+        return HN.open_note(job["source"], job.get("fontPt", 12))
     if job["kind"] == "text":
         # 手写的字走内存渲染；上传的 .txt 和从微信取来的 .txt 是真实文件，必须读文件，
         # 否则 job["text"] 是空的，会打出一张白纸。
@@ -723,6 +734,18 @@ class Handler(BaseHTTPRequestHandler):
             m = re.match(r"^/api/wechat/thumb/([0-9a-f]{16})$", path)
             if m:
                 return self.api_wechat_thumb(m.group(1))
+            if path == "/api/notes/list":
+                return self.api_notes_list()
+            if path == "/api/notes/cats":
+                return self.api_notes_cats()
+            m = re.match(r"^/api/notes/get/([0-9a-f]{12})$", path)
+            if m:
+                return self.api_notes_get(m.group(1))
+            if path == "/api/inbox/list":
+                return self.api_inbox_list()
+            m = re.match(r"^/api/inbox/thumb/([0-9a-f]{12})$", path)
+            if m:
+                return self.api_inbox_thumb(m.group(1))
             return self._json({"error": "not found"}, 404)
         except Exception as e:
             log("GET %s failed: %s" % (path, e))
@@ -847,6 +870,22 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/wechat/import":
                 return self.api_wechat_import()
+
+            if path == "/api/inbox/upload":
+                return self.api_inbox_upload()
+            if path == "/api/inbox/import":
+                return self.api_inbox_import()
+            if path == "/api/inbox/remove":
+                return self.api_inbox_remove()
+            if path == "/api/inbox/clear":
+                return self.api_inbox_clear()
+
+            if path == "/api/notes/save":
+                return self.api_notes_save()
+            if path == "/api/notes/remove":
+                return self.api_notes_remove()
+            if path == "/api/note":
+                return self.api_note_print()
 
             if path == "/api/printer":
                 data = json.loads(self._body().decode("utf-8") or "{}")
@@ -1128,6 +1167,198 @@ class Handler(BaseHTTPRequestHandler):
         if jobs:
             log("wechat import: %d file(s) -> %s" % (len(jobs), ",".join(j["name"] for j in jobs[:3])))
         return self._json({"jobs": jobs, "errors": errs})
+
+    # -- 手机中转收件箱（安卓中转 APP 分享过来的）
+
+    def api_inbox_list(self):
+        try:
+            items = IB.items()
+        except Exception as e:
+            log("inbox list failed: %s" % e)
+            return self._json({"ok": False, "error": str(e), "items": []})
+        return self._json({
+            "ok": True, "count": len(items),
+            "items": [IB.public(m) for m in items], "ts": time.time(),
+        })
+
+    def api_inbox_upload(self):
+        """安卓中转 APP 打过来的接口。
+
+        故意做得和 /api/upload 一样朴素：body 就是文件字节，文件名走 X-File-Name 头。
+        APP 端用 HttpURLConnection 就能打，不需要 multipart 库。
+        """
+        raw_name = unquote(self.headers.get("X-File-Name", "") or "unnamed")
+        name = os.path.basename(raw_name.replace("\\", "/")) or "unnamed"
+        data = self._body()
+        if not data:
+            return self._json({"error": "没收到内容"}, 400)
+        try:
+            meta = IB.add(data, name, origin=self.headers.get("X-Origin") or "phone")
+        except Exception as e:
+            return self._json({"error": str(e)}, 400)
+        log("inbox upload: %s (%d bytes)" % (meta["name"], meta["size"]))
+        return self._json({"ok": True, "item": IB.public(meta)})
+
+    def api_inbox_import(self):
+        import shutil
+        data = json.loads(self._body().decode("utf-8") or "{}")
+        ids = data.get("ids") or []
+        if not ids:
+            return self._json({"error": "没有选择文件"}, 400)
+        metas = {}
+        try:
+            for m in IB.items(limit=400):
+                metas[m.get("id")] = m
+        except Exception as e:
+            log("inbox scan failed: %s" % e)
+        jobs, errs = [], []
+        for sid in ids[:30]:
+            m = metas.get(sid)
+            src = (m or {}).get("path", "")
+            if not src or not os.path.isfile(src):
+                errs.append("文件已经不在了")
+                continue
+            name = (m or {}).get("name") or os.path.basename(src)
+            if RD.classify(name) == "unknown":
+                errs.append("%s：不支持的格式" % name)
+                continue
+            jid = uuid.uuid4().hex[:10]
+            folder = os.path.join(JOBS, jid)
+            os.makedirs(folder, exist_ok=True)
+            safe = re.sub(r'[\\/:*?"<>|]+', "_", name)
+            dst = os.path.join(folder, safe)
+            try:
+                shutil.copy2(src, dst)
+                s = RD.open_source(dst)
+                pages = s.page_count
+                s.close()
+            except Exception as e:
+                shutil.rmtree(folder, ignore_errors=True)
+                errs.append("%s：%s" % (name, e))
+                continue
+            jobs.append(public(new_job(safe, RD.classify(dst), dst, pages,
+                                       size=os.path.getsize(dst), jid=jid)))
+        if jobs:
+            log("inbox import: %d file(s) -> %s" % (len(jobs), ",".join(j["name"] for j in jobs[:3])))
+        return self._json({"jobs": jobs, "errors": errs})
+
+    def api_inbox_thumb(self, sid):
+        path = IB.resolve(sid)
+        if not path:
+            return self._json({"error": "文件不存在"}, 404)
+        if RD.classify(path) != "image":
+            return self._json({"error": "不是图片"}, 404)
+        try:
+            with Image.open(path) as im:
+                im = im.convert("RGB")
+                im.thumbnail((240, 320), Image.LANCZOS)
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=76)
+            return self._bytes(buf.getvalue(), "image/jpeg")
+        except Exception as e:
+            return self._json({"error": str(e)}, 500)
+
+    def api_inbox_remove(self):
+        data = json.loads(self._body().decode("utf-8") or "{}")
+        ids = data.get("ids") or []
+        n = 0
+        for sid in ids[:200]:
+            if IB.remove(sid):
+                n += 1
+        return self._json({"ok": True, "removed": n})
+
+    def api_inbox_clear(self):
+        try:
+            n = IB.clear()
+        except Exception as e:
+            return self._json({"error": str(e)}, 500)
+        log("inbox cleared: %d file(s)" % n)
+        return self._json({"ok": True, "removed": n})
+
+    # -- 笔记
+
+    def api_notes_list(self):
+        q = parse_qs(urlparse(self.path).query)
+        cat = (q.get("cat") or [""])[0]
+        try:
+            items = NT.items(cat=cat)
+        except Exception as e:
+            log("notes list failed: %s" % e)
+            return self._json({"ok": False, "error": str(e), "notes": []})
+        return self._json({"ok": True, "count": len(items),
+                           "notes": [NT.public(n) for n in items]})
+
+    def api_notes_cats(self):
+        try:
+            cats = NT.cats()
+        except Exception as e:
+            log("notes cats failed: %s" % e)
+            return self._json({"ok": False, "error": str(e), "cats": []})
+        return self._json({"ok": True, "cats": cats, "total": NT.count()})
+
+    def api_notes_get(self, nid):
+        note = NT.load(nid)
+        if not note:
+            return self._json({"error": "笔记不存在"}, 404)
+        return self._json({"ok": True, "note": note})
+
+    def api_notes_save(self):
+        data = json.loads(self._body().decode("utf-8") or "{}")
+        try:
+            note = NT.save(data)
+        except Exception as e:
+            log("notes save failed: %s" % e)
+            return self._json({"error": str(e)}, 500)
+        log("note saved: %s (%s)" % (NT.public(note)["title"], note["id"]))
+        return self._json({"ok": True, "note": NT.public(note)})
+
+    def api_notes_remove(self):
+        data = json.loads(self._body().decode("utf-8") or "{}")
+        nid = (data.get("id") or "").strip()
+        if not nid:
+            return self._json({"error": "没有指定笔记"}, 400)
+        return self._json({"ok": NT.remove(nid)})
+
+    def api_note_print(self):
+        """把笔记加进打印队列。
+
+        正文 HTML 落成 job 目录下的 note.html，之后 source_of() 认 kind='note'
+        交给 htmlnote 排版。这样预览和打印走的是同一份内容，不会两边不一致。
+        """
+        data = json.loads(self._body().decode("utf-8") or "{}")
+        nid = (data.get("id") or "").strip()
+        pt = int(data.get("pt") or 0) or 12
+        if nid:
+            note = NT.load(nid)
+            if not note:
+                return self._json({"error": "笔记不存在"}, 404)
+            html = note.get("html", "")
+            title = note.get("title") or ""
+            pt = int(note.get("pt") or pt)
+        else:
+            html = data.get("html") or ""
+            title = (data.get("title") or "").strip()
+        if not (html or "").strip():
+            return self._json({"error": "内容是空的"}, 400)
+
+        jid = uuid.uuid4().hex[:10]
+        folder = os.path.join(JOBS, jid)
+        os.makedirs(folder, exist_ok=True)
+        safe = re.sub(r'[\\/:*?"<>|]+', "_", title)[:60] or "笔记"
+        npath = os.path.join(folder, "note.html")
+        with open(npath, "w", encoding="utf-8") as f:
+            f.write(html)
+        try:
+            src = HN.open_note(npath, pt)
+            pages = src.page_count
+        except Exception as e:
+            import shutil
+            shutil.rmtree(folder, ignore_errors=True)
+            return self._json({"error": str(e)}, 500)
+        job = new_job(safe, "note", npath, pages, font_pt=pt, jid=jid,
+                      size=os.path.getsize(npath))
+        log("note -> job %s pages=%d pt=%d" % (jid, pages, pt))
+        return self._json({"job": public(job)})
 
 
 def public(job: dict):

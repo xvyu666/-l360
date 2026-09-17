@@ -1,0 +1,32 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.printinbox.relay'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.printinbox.relay"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+// 刻意零第三方依赖：连 okhttp 都不用，上传走 HttpURLConnection。
+// 这样项目离线也能编译，也不会因为依赖升级而坏。
+dependencies {
+}
