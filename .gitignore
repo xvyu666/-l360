@@ -16,6 +16,7 @@ runtime/pyembed.zip
 
 # ---- 便携版打包产物（约 80MB，作为 GitHub Release 附件发布，不进 Git）----
 dist/
+release/
 
 # ---- 调试 / 临时文件 ----
 reflow_compare.png
