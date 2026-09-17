@@ -53,19 +53,29 @@ android-relay/
 
 ## 编译
 
-本仓库不附 APK（GitHub 不适合托管二进制），自己编译只要三步：
+两条路，推荐第一条（不用装 1.5GB 的 Android Studio）：
 
-1. 装 **Android Studio**（任意近期版本，自带 SDK 和 Gradle）
-2. **Open** 打开 `android-relay/` 目录，等 Gradle 同步完
-   （首次会自动下载 Gradle 8.7 和 SDK 组件，要联网）
-3. 菜单 **Build → Build APK(s)**，产物在
-   `app/build/outputs/apk/debug/app-debug.apk`
+**A. GitHub 云端编译（推荐）**
 
-传到手机安装（需要允许"安装未知来源应用"）。想要 release 签名包，
-Build → Generate Signed Bundle/APK，按向导生成一个 keystore 即可。
+仓库里已经配好 `.github/workflows/build-apk.yml`。代码推上去后打一个 tag：
 
-不想装 Android Studio 的替代路径：装 JDK 17 + Android 命令行工具，
-`gradle assembleDebug`。命令行党自己折腾，不展开。
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+Actions 会自动编译，产物直接挂在 Release 附件里（`app-debug.apk`，约 100KB）。
+也可以不打 tag：Actions 页手动 `Run workflow`，从 Artifacts 下载。
+
+**B. 本地 Android Studio**
+
+1. 装 Android Studio（自带 SDK + Gradle）
+2. **Open** 打开 `android-relay/` 目录（子目录，不是仓库根），等同步完
+3. **Build → Build APK(s)**，产物在 `app/build/outputs/apk/debug/app-debug.apk`
+
+想要 release 签名包：`Build → Generate Signed Bundle/APK`，按向导生成 keystore。
+
+> 装到手机上的具体授权步骤（各品牌的「允许安装未知应用」入口、常见报错、
+> 首次填写电脑地址）见 **[10-手机端安装](10-手机端安装.md)**。
 
 ## 手机端设置（一次）
 

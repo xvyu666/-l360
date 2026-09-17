@@ -1,0 +1,73 @@
+# 在 GitHub 云端编译安卓中转 APP 的 APK。
+#
+# 触发方式（三选一）：
+#   1. push 一个 v 开头的 tag（如 v1.0.0）→ 自动编译并挂到 Release
+#   2. 网页上 Actions → 本工作流 → Run workflow → 手动触发
+#   3. 提 PR 时也会跑一遍，验证代码能否编译
+#
+# 这样电脑端完全不用装 Android Studio（那玩意要下 1.5GB+ SDK）。
+
+name: 构建安卓中转 APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # 只是打包，不需要任何特权
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # AGP 8.5 + Gradle 8.7 要求 JDK 17，低于 17 会直接报错
+      - name: 准备 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 确保 ANDROID_HOME / cmdline-tools 就位（runner 镜像自带，这步兜底）
+      - name: 准备 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 Android SDK 组件（API 34）
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      # 仓库里只有 gradle-wrapper.properties，没有 gradlew 脚本，
+      # 所以这里直接装一个和项目匹配的 Gradle 8.7。
+      - name: 安装 Gradle 8.7
+        run: |
+          curl -sSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          sudo unzip -q /tmp/gradle.zip -d /opt
+          sudo ln -sfn /opt/gradle-8.7/bin/gradle /usr/local/bin/gradle
+          gradle --version | head -3
+
+      - name: 编译 Debug APK
+        run: gradle -p android-relay assembleDebug --no-daemon
+
+      # debug 包用公共调试签名，装到手机上不需要额外签名步骤
+      - name: 上传 APK 为构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 打印中转-APK
+          path: android-relay/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+      # 只在打 tag 时才挂 Release，PR 触发时跳过
+      - name: 挂到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android-relay/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
