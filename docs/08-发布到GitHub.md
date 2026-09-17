@@ -298,8 +298,63 @@ SHA256: （贴 `certutil -hashfile 文件名 SHA256` 的结果）
 gh release create v1.0.0 \
   --title "v1.0.0 · 手机打印助手（含便携版）" \
   --notes-file RELEASE_NOTES.md \
-  "dist/手机打印助手-v1.0.0-便携版.zip"
+  "release/手机打印助手-v1.0.0-便携版.zip"
 ```
+
+---
+
+## 第 6.5 步 · 让 GitHub 自动编译 APK（不用装 Android Studio）
+
+仓库里已经放好了 `.github/workflows/build-apk.yml`。代码推上去之后，
+GitHub 的服务器会帮你编译安卓中转 APP，APK 直接出现在 Release 附件里。
+**整个流程不需要本机有 Java / Android SDK。**
+
+### 6.5.1 三个前提，缺一不可
+
+1. 代码已经推到 GitHub（第 4 步做完）
+2. 推送的内容里**包含** `.github/workflows/build-apk.yml`
+3. Tag 指向的 commit 里**有**这个文件 —— ⚠️ 最容易在这里白忙活：
+   如果你**先打了 tag、后加的 workflow**，那个 tag 还停在旧 commit 上，
+   推上去之后 **Actions 根本不会触发**。
+
+   先确认：
+
+   ```bash
+   git ls-tree -r --name-only v1.0.0 | grep workflow
+   # 有输出 = 没问题；没输出 = tag 指错了，重建它：
+   git tag -d v1.0.0
+   git tag -a v1.0.0 -m "v1.0.0：首个公开版本"
+   ```
+
+### 6.5.2 推 tag，触发编译
+
+```bash
+git push origin v1.0.0
+```
+
+### 6.5.3 等 3~5 分钟，看结果
+
+1. 仓库页 → **Actions** 标签
+2. 左侧列表里找「构建安卓中转 APK」，黄色圆点=在跑，绿色勾=成功，红叉=失败
+3. 点进去可以看每一步的日志（Gradle 首次编译会慢一点）
+
+### 6.5.4 拿 APK
+
+- **打了 tag 的情况**：APK 会自动挂在 Release 附件里，叫 `app-debug.apk`（约 100KB）
+- **没打 tag 的情况**：Actions 页 → 右上角 `Run workflow` → 跑完在页面底部
+  **Artifacts** 区下载（需登录 GitHub，保留 90 天）
+
+装到手机上的步骤见 [10-手机端安装](10-手机端安装.md)。
+
+### 6.5.5 出问题时
+
+| 现象 | 原因 | 怎么办 |
+| --- | --- | --- |
+| Actions 页空空如也 | tag 指向旧 commit（见 6.5.1） | 重建 tag 再推 |
+| 工作流没被触发 | 仓库设置里禁用了 Actions | Settings → Actions → General → 选 Allow all |
+| 编译失败（红叉） | SDK/Gradle 版本问题 | 点进日志看报错；一般是网络抖动，`Re-run` 一次 |
+| Release 里没有 APK | 不是 tag 触发的 | 手动跑一次，或重新推 tag |
+| 上传 APK 报权限错 | 仓库没开写权限 | Settings → Actions → General → Workflow permissions → Read and write |
 
 ---
 
@@ -345,6 +400,9 @@ gh release create v1.1.0 --notes "更新内容…" "dist/手机打印助手-v1.1
 | 症状 | 原因 / 解决 |
 | --- | --- |
 | `fatal: unable to access ... Empty reply from server` | HTTPS 443 被干扰，换 SSH 或 `gh` CLI |
+| curl/github.com 返回 `000`、TLS 握手超时，但 `api.github.com` 正常 | 只对主站干扰。**SSH 是通的**（22 和 443 都行），用 `git@github.com:...` 推送；HTTPS/PAT 这条路在本机走不通 |
+| `ssh-keygen -f "C:/Users/中文名/.ssh/id_ed25519"` 报 No such file | ssh-keygen 处理不了非 ASCII 路径。改用 `cd ~/.ssh && ssh-keygen -t ed25519 -f id_ed25519`（相对路径） |
+| Actions 编译 APK 一直没跑起来 | 见 6.5.1：tag 指向的 commit 里必须有 workflow 文件 |
 | `Support for password authentication was removed` | GitHub 不再接受登录密码，用 PAT 或 SSH |
 | `Permission denied (publickey)` | SSH key 没加上，跑 `ssh -T git@github.com` 复测 |
 | `remote: error: File ... is 120.00 MB; this exceeds GitHub's file size limit` | 大文件进了提交。用 `git rm --cached` 移出，历史里的用 `git filter-repo` 清 |
