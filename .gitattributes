@@ -1,0 +1,24 @@
+# 统一换行符：仓库里存 LF，Windows 上 checkout 成 CRLF，
+# 免得 .bat 在 Linux/Mac 上被改坏，也免得 .py 在提交时整文件 diff。
+* text=auto
+
+*.py    text eol=lf
+*.js    text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+
+# Windows 批处理必须是 CRLF，否则跳转和中文注释会出诡异问题
+*.bat   text eol=crlf
+
+# 二进制，不要做 text 转换也不要 diff
+*.png   binary
+*.jpg   binary
+*.svg   text
+*.zip   binary
+*.dll   binary
+*.pyd   binary
+*.ico   binary

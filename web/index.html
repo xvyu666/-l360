@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#f6f7f9">
+<meta name="mobile-web-app-capable" content="yes">
+<title>手机打印</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/editor.css">
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --line:#e6e8eb; --text:#1b1f24; --sub:#6b7280;
+  --brand:#1a73e8; --brand-d:#1667cf; --ok:#12a150; --warn:#c2410c; --err:#dc2626;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);font-size:16px;line-height:1.5;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
+  overscroll-behavior-y:contain;
+}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px}
+
+/* ---------- 顶栏 ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:rgba(246,247,249,.86);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  padding:calc(10px + env(safe-area-inset-top)) 0 10px;
+}
+.hrow{display:flex;align-items:center;gap:10px}
+.logo{
+  width:34px;height:34px;border-radius:10px;background:var(--brand);color:#fff;
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.logo svg{width:20px;height:20px}
+.htitle{font-size:17px;font-weight:700;letter-spacing:.2px}
+.hsub{font-size:12px;color:var(--sub);margin-top:1px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px}
+.dot.off{background:#9ca3af}.dot.busy{background:var(--warn)}
+
+/* ---------- 卡片 ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;margin-top:14px}
+.card.tight{padding:12px}
+h3{margin:0 0 10px;font-size:14px;color:var(--sub);font-weight:600;letter-spacing:.3px}
+
+/* ---------- 按钮 ---------- */
+.btn{
+  border:1px solid var(--line);background:#fff;color:var(--text);
+  border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:transform .06s ease,background .16s ease;user-select:none;
+}
+.btn:active{transform:scale(.985)}
+.btn .ico{width:18px;height:18px}
+.btn.ghost{background:#fff}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.big{height:56px;font-size:18px;border-radius:16px}
+.btn.wide{width:100%}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ---------- 文件列表 ---------- */
+.file{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.file:first-child{border-top:0}
+.thumb{
+  width:54px;height:70px;border-radius:8px;background:#f1f3f5;border:1px solid var(--line);
+  object-fit:cover;flex:none;
+}
+.fname{flex:1;min-width:0}
+.fname b{display:block;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fname small{color:var(--sub);font-size:12px}
+.del{border:0;background:#f1f3f5;width:32px;height:32px;border-radius:50%;color:var(--sub);font-size:18px;flex:none}
+.empty{text-align:center;color:var(--sub);padding:26px 6px;font-size:14px}
+.empty .big{font-size:34px;display:block;margin-bottom:8px;opacity:.35}
+
+/* ---------- 选项 ---------- */
+.opt-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.opt-toggle span{color:var(--sub);font-size:13px}
+.opts{display:none;margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.opts.open{display:block}
+.grp{margin-bottom:14px}
+.grp>label{display:block;font-size:13px;color:var(--sub);margin-bottom:7px;font-weight:600}
+.seg{display:flex;background:#f1f3f5;border-radius:11px;padding:3px;gap:3px}
+.seg button{
+  flex:1;border:0;background:transparent;border-radius:9px;padding:9px 4px;font-size:14px;
+  color:var(--sub);font-weight:600;cursor:pointer;font-family:inherit;
+}
+.seg button.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* 选项超过 3 个时一行摆不下，让它自己折行，别把字压扁 */
+.seg.wrap{flex-wrap:wrap}
+.seg.wrap button{flex:1 1 72px;min-width:72px}
+select{
+  width:100%;border:1px solid var(--line);border-radius:11px;padding:11px 12px;
+  background:#fff;font-size:15px;color:var(--text);font-family:inherit;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%236b7280' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 12px center;
+}
+.stepper{display:flex;align-items:center;gap:14px}
+.stepper .n{min-width:36px;text-align:center;font-size:19px;font-weight:700}
+.cbtn{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:20px;color:var(--text)}
+.hint{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.5}
+
+/* ---------- 底部 ---------- */
+footer{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+}
+.finner{max-width:560px;margin:0 auto}
+.fmeta{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:8px}
+
+/* ---------- 弹层 ---------- */
+.mask{position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:50;display:none;align-items:flex-end;justify-content:center}
+.mask.show{display:flex}
+.sheet{
+  background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+  animation:up .22s ease;
+}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:translateY(0);opacity:1}}
+.sheet h2{margin:0 0 12px;font-size:17px}
+textarea{
+  width:100%;min-height:150px;border:1px solid var(--line);border-radius:12px;padding:12px;
+  font-size:16px;font-family:inherit;resize:vertical;line-height:1.6;
+}
+.prog{height:8px;background:#eef0f2;border-radius:99px;overflow:hidden;margin:14px 0}
+.prog i{display:block;height:100%;width:0;background:var(--brand);border-radius:99px;transition:width .3s ease}
+.spin{width:44px;height:44px;border-radius:50%;border:3px solid #e6e8eb;border-top-color:var(--brand);animation:sp .8s linear infinite;margin:4px auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.center{text-align:center}
+.tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.tag.ok{background:#e7f6ee;color:var(--ok)}
+.tag.err{background:#fdecec;color:var(--err)}
+.tag.warn{background:#fff2e8;color:var(--warn)}
+.toast{
+  position:fixed;left:14px;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));
+  background:#1b1f24;color:#fff;padding:12px 14px;border-radius:12px;font-size:14px;z-index:60;
+  opacity:0;transform:translateY(8px);transition:.24s ease;pointer-events:none;max-width:532px;margin:0 auto;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.hidden{display:none!important}
+.kv{display:flex;justify-content:space-between;font-size:14px;padding:7px 0;border-top:1px solid var(--line)}
+.kv:first-of-type{border-top:0}
+.kv b{font-weight:600}
+
+/* ---------- 微信文件 ---------- */
+.wxitem{display:flex;gap:11px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.wxitem:first-child{border-top:0}
+.wxbadge{
+  width:54px;height:70px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;letter-spacing:.4px;color:#fff;
+}
+.wxbadge.pdf{background:#e11d48}
+.wxbadge.office{background:#2563eb}
+.wxbadge.text{background:#64748b}
+.wxbadge.image{background:#059669}
+.wxbadge.other{background:#9ca3af}
+.wxpick{
+  width:24px;height:24px;border-radius:50%;border:2px solid #d1d5db;flex:none;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800;
+}
+.wxitem.on .wxpick{background:var(--brand);border-color:var(--brand)}
+.wxfresh{display:inline-block;background:#e7f6ee;color:var(--ok);font-size:11px;font-weight:700;
+  border-radius:99px;padding:1px 7px;margin-left:6px}
+.wxsearch{
+  width:100%;border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+  font-size:15px;font-family:inherit;background:#fff;color:var(--text);
+}
+/* 图片九宫格 */
+.wxgrid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+  max-height:44vh;overflow:auto;margin-top:6px;-webkit-overflow-scrolling:touch;
+}
+.wxcell{
+  position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  background:var(--card);cursor:pointer;
+}
+.wxcell.on{border-color:var(--brand);box-shadow:0 0 0 2px rgba(26,115,232,.16)}
+.wxcell img{display:block;width:100%;height:94px;object-fit:cover;background:#f3f4f6}
+.wxcell .meta{padding:5px 6px;font-size:11px;line-height:1.4}
+.wxcell .who{font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wxcell .dim{color:var(--sub)}
+.wxcell .qbar{
+  position:absolute;left:4px;top:4px;font-size:10px;font-weight:700;padding:2px 5px;
+  border-radius:5px;background:rgba(17,24,39,.62);color:#fff;
+}
+.wxcell .tick{
+  position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;
+  background:rgba(255,255,255,.94);border:1px solid var(--line);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;
+}
+.wxcell.on .tick{background:var(--brand);border-color:var(--brand);color:#fff}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hrow">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+        <path d="M6 14h12v8H6z"/>
+      </svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="htitle">手机打印</div>
+      <div class="hsub"><span class="dot off" id="dot"></span><span id="printerLine">正在连接…</span></div>
+    </div>
+    <button class="btn" style="padding:8px 10px;font-size:13px" onclick="doTest()">测试页</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h3>要打印什么</h3>
+    <div class="row3">
+      <label class="btn ghost" style="flex-direction:column;gap:5px;padding:12px 6px;font-size:13px">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+        选择文件
+        <input type="file" multiple id="filePick" hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.heic,.heif">
+      </label>
+      <button class="btn ghost" style="flex-direction:column;gap:5px;padding:12px 6px;font-size:13px" onclick="openText()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+        写段字
+      </button>
+      <button class="btn ghost" style="flex-direction:column;gap:5px;padding:12px 6px;font-size:13px" onclick="openWechat()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-8.5 8.5 8.9 8.9 0 01-3.8-.9L3 21l1.9-5.1A8.4 8.4 0 013 11.5 8.4 8.4 0 0112.5 3 8.4 8.4 0 0121 11.5z"/><path d="M8.5 10.5h.01M12.5 10.5h.01"/></svg>
+        微信文件
+      </button>
+    </div>
+    <div class="hint" id="accHint">手机相册照片、截图、PDF、Word / Excel / PPT、随手写的字都能打<br>「微信文件」：在微信里把文件发给自己 / 文件传输助手，这边直接就能打，不用再传一遍</div>
+  </div>
+
+  <div class="card">
+    <h3>已选择 <span id="cntTotal" style="color:var(--text)"></span></h3>
+    <div id="list">
+      <div class="empty"><span class="big">🗂️</span>还没有选择文件</div>
+    </div>
+    <div id="layoutEntry" hidden style="margin-top:12px">
+      <button class="btn primary wide" onclick="EDopen()">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        截图排版
+      </button>
+      <div class="hint" style="margin-top:6px">几张挤一页省纸 · 长图自动分页 · 能裁边、加标题、拖着摆</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="opt-toggle" onclick="toggleOpts()">
+      <b style="font-size:15px">打印选项</b>
+      <span id="optSum">默认 · 彩色 · A4 · 1 份</span>
+    </div>
+    <div class="opts" id="opts">
+      <div class="grp">
+        <label>打印方式</label>
+        <div class="seg" data-key="mode">
+          <button data-v="native" class="on">原文件直印</button>
+          <button data-v="render">网页排版</button>
+        </div>
+        <div class="hint" id="modeHint">「原文件直印」：Word / Excel / PPT 交给 Office 自己打印，版式、分页、页边距跟你电脑上按 Ctrl+P 完全一致，文字也是矢量输出最清楚。图片和 PDF 仍走网页排版。</div>
+      </div>
+      <div class="grp">
+        <label>颜色</label>
+        <div class="seg" data-key="color">
+          <button data-v="color" class="on">彩色</button>
+          <button data-v="mono">黑白（省墨）</button>
+        </div>
+      </div>
+      <div class="grp">
+        <label>纸张</label>
+        <select id="paper" data-key="paper"></select>
+        <div class="hint" id="paperHint">通常保持 A4。照片打印可选 4R / 5R。</div>
+      </div>
+      <div class="grp">
+        <label>方向</label>
+        <div class="seg" data-key="orientation">
+          <button data-v="auto" class="on">自动</button>
+          <button data-v="portrait">竖向</button>
+          <button data-v="landscape">横向</button>
+        </div>
+      </div>
+      <div class="grp">
+        <label>排版方式</label>
+        <div class="seg wrap" data-key="layout">
+          <button data-v="fit" class="on">适应纸张</button>
+          <button data-v="fill">填满纸张</button>
+          <button data-v="natural">原图尺寸</button>
+          <button data-v="reflow">重排放大</button>
+        </div>
+        <div class="hint" id="layoutHint">「适应」完整显示并留白；「填满」铺满但可能裁掉边缘；「原图」按原始尺寸；「重排放大」剥掉原文件的白边后按页边距等比放大。</div>
+      </div>
+      <div class="grp">
+        <label>清晰度</label>
+        <div class="seg" data-key="quality">
+          <button data-v="draft">草稿</button>
+          <button data-v="standard" class="on">标准</button>
+          <button data-v="high">高质量</button>
+        </div>
+        <div class="hint">草稿省墨且快，打印地道或不重要的东西选它。</div>
+      </div>
+      <div class="grp">
+        <label>页边距</label>
+        <div class="seg" id="marginSeg">
+          <button data-m="none" class="on" onclick="setMargin('none')">贴边</button>
+          <button data-m="narrow" onclick="setMargin('narrow')">窄</button>
+          <button data-m="moderate" onclick="setMargin('moderate')">适中</button>
+          <button data-m="wide" onclick="setMargin('wide')">宽</button>
+          <button data-m="custom" onclick="setMargin('custom')">自定义</button>
+        </div>
+        <div id="marginCustom" hidden>
+          <div class="row2" style="margin-top:8px;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+            <div class="grp" style="margin:0"><label>上</label><input class="edinput" id="mT" type="number" step="0.5" min="0" max="60" value="25.4" oninput="applyCustomMargin()"></div>
+            <div class="grp" style="margin:0"><label>下</label><input class="edinput" id="mB" type="number" step="0.5" min="0" max="60" value="25.4" oninput="applyCustomMargin()"></div>
+            <div class="grp" style="margin:0"><label>左</label><input class="edinput" id="mL" type="number" step="0.5" min="0" max="60" value="25.4" oninput="applyCustomMargin()"></div>
+            <div class="grp" style="margin:0"><label>右</label><input class="edinput" id="mR" type="number" step="0.5" min="0" max="60" value="25.4" oninput="applyCustomMargin()"></div>
+          </div>
+        </div>
+        <div class="hint" id="marginHint">贴边＝内容顶到打印机可打印区域（最大）。装订/打孔选「宽」。</div>
+      </div>
+      <div class="grp">
+        <label>份数</label>
+        <div class="stepper">
+          <button class="cbtn" onclick="bump(-1)">−</button>
+          <span class="n" id="copies">1</span>
+          <button class="cbtn" onclick="bump(1)">＋</button>
+        </div>
+      </div>
+      <div class="grp">
+        <label>双面（手动）</label>
+        <div class="seg" data-key="duplex">
+          <button data-v="off" class="on">关</button>
+          <button data-v="long">长边翻转</button>
+          <button data-v="short">短边翻转</button>
+        </div>
+        <div class="hint">L360 不能自动双面。选了之后会先打奇数页，提示你翻面后再打偶数页。<br>双面时会临时改用「网页排版」方式出纸，页码才准。</div>
+      </div>
+      <div class="grp" style="margin-bottom:2px">
+        <button class="btn ghost wide" onclick="openPreview()">打印预览（看清楚再打，省纸）</button>
+        <div class="row2" style="margin-top:8px">
+          <button class="btn ghost" onclick="doTest()">打印测试页</button>
+          <button class="btn ghost" onclick="showInfo()">连接信息</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card tight" id="histCard" hidden>
+    <h3>最近打印</h3>
+    <div id="hist"></div>
+  </div>
+
+  <p style="text-align:center;color:#9ca3af;font-size:12px;margin:18px 0 8px">
+    手机需与电脑连同一个 WiFi · 打印时电脑要保持开机
+  </p>
+</div>
+
+<footer>
+  <div class="finner">
+    <div class="fmeta"><span id="fmetaL">未选择文件</span><span id="fmetaR"></span></div>
+    <button class="btn primary big wide" id="printBtn" disabled onclick="doPrint()">打印</button>
+  </div>
+</footer>
+
+<!-- 文字输入 -->
+<div class="mask" id="textMask">
+  <div class="sheet">
+    <h2>写段字</h2>
+    <textarea id="textInput" placeholder="收货地址、备忘、几句话…&#10;支持换行，自动分页"></textarea>
+    <div class="grp" style="margin-top:12px">
+      <label>字号</label>
+      <div class="seg" id="ptSeg">
+        <button data-v="10">小</button>
+        <button data-v="12" class="on">中</button>
+        <button data-v="14">大</button>
+        <button data-v="18">特大</button>
+      </div>
+    </div>
+    <div class="row2" style="margin-top:14px">
+      <button class="btn ghost" onclick="closeText()">取消</button>
+      <button class="btn primary" onclick="submitText()">加入打印队列</button>
+    </div>
+  </div>
+</div>
+
+<!-- 进度 -->
+<div class="mask" id="progMask">
+  <div class="sheet center">
+    <h2 id="progTitle">正在打印</h2>
+    <div class="spin" id="spin"></div>
+    <div id="progMsg" style="color:var(--sub);font-size:14px;margin-bottom:4px">准备中…</div>
+    <div class="prog"><i id="bar"></i></div>
+    <div id="progAfter" class="hidden" style="margin-top:6px"></div>
+  </div>
+</div>
+
+<!-- 微信文件 -->
+<div class="mask" id="wxMask">
+  <div class="sheet">
+    <h2>微信收件箱</h2>
+    <div class="hint" id="wxStatus" style="margin-top:-6px">正在读取…</div>
+    <div class="seg" id="wxTab" style="margin-top:10px">
+      <button data-t="file" class="on">文件</button>
+      <button data-t="img">图片</button>
+    </div>
+    <div class="seg" id="wxRange" style="margin-top:8px">
+      <button data-h="new" class="on">新到的</button>
+      <button data-h="1">1 时</button>
+      <button data-h="24">24 时</button>
+      <button data-h="72">3 天</button>
+      <button data-h="168">7 天</button>
+      <button data-h="0">全部</button>
+    </div>
+    <input class="wxsearch" id="wxSearch" placeholder="搜文件名…" style="margin-top:9px">
+    <select id="wxSess" style="display:none;width:100%;margin-top:9px;border:1px solid var(--line);border-radius:11px;padding:9px 12px;font-size:15px;font-family:inherit;background:#fff;color:var(--text)">
+      <option value="">全部会话</option>
+    </select>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+      <button class="btn ghost" style="flex:0 0 auto;padding:7px 11px;font-size:13px" onclick="wxSelectAll(true)">全选</button>
+      <button class="btn ghost" style="flex:0 0 auto;padding:7px 11px;font-size:13px" onclick="wxSelectAll(false)">不选</button>
+      <button class="btn ghost" style="flex:0 0 auto;padding:7px 11px;font-size:13px" onclick="wxMarkDone()">收完了</button>
+      <span class="hint" style="flex:1;text-align:right" id="wxCount"></span>
+    </div>
+    <div class="hint" id="wxSince" style="margin-top:6px"></div>
+    <div id="wxList" style="max-height:38vh;overflow:auto;margin-top:6px;-webkit-overflow-scrolling:touch"></div>
+    <div id="wxGrid" class="wxgrid" style="display:none"></div>
+    <div class="row2" style="margin-top:14px">
+      <button class="btn ghost" onclick="closeWechat()">取消</button>
+      <button class="btn primary" id="wxImport" onclick="importWx()">加入队列</button>
+    </div>
+    <div class="hint" id="wxTip" style="margin-top:8px">用法：微信里长按消息 →「多选」→ 转发到「文件传输助手」，回到这里，新到的就在「新到的」里了。<br>打完点「收完了」，列表清空等下一批。列表每 10 秒自动刷新。直接发的图片微信是加密存的，打不了，要用「发送文件」的方式发。</div>
+  </div>
+</div>
+
+<!-- 信息 -->
+<div class="mask" id="infoMask">
+  <div class="sheet">
+    <h2>连接信息</h2>
+    <div id="infoBody"></div>
+    <button class="btn primary wide" style="margin-top:14px" onclick="closeInfo()">好</button>
+  </div>
+</div>
+
+<!-- 截图排版编辑器 -->
+<div class="edwrap" id="edWrap" hidden>
+  <div class="edtop">
+    <div class="tbtn" onclick="EDclose()">← 返回</div>
+    <div class="mid">
+      <div class="t1">截图排版</div>
+      <div class="t2" id="edMeta">第 1/1 页</div>
+    </div>
+    <div class="tbtn" onclick="EDaddPage()">＋页</div>
+  </div>
+
+  <div class="edstage" id="edStage">
+    <div class="edpage" id="edPage"><div class="editems" id="edItems"></div></div>
+    <div class="row2" style="width:100%;max-width:420px;margin-top:10px">
+      <div class="tbtn" onclick="EDprev()">◀ 上一页</div>
+      <div class="tbtn" onclick="EDnext()">下一页 ▶</div>
+    </div>
+  </div>
+
+  <div class="edbar">
+    <div class="edtabs">
+      <div class="edtab on" data-tab="mat" onclick="EDtab('mat')">素材</div>
+      <div class="edtab" data-tab="lay" onclick="EDtab('lay')">排版</div>
+      <div class="edtab" data-tab="proc" onclick="EDtab('proc')">处理</div>
+      <div class="edtab" data-tab="sel" onclick="EDtab('sel')">选中</div>
+    </div>
+    <div class="edpanel" id="edPanel"></div>
+    <div class="row2" style="gap:8px">
+      <div class="btn ghost" onclick="EDrelayout()">重新排版</div>
+      <button class="btn primary" onclick="EDprint()">打印 <span id="edPages"></span></button>
+    </div>
+  </div>
+</div>
+
+<!-- 打印预览 -->
+<div class="mask" id="prevMask">
+  <div class="sheet" style="max-height:90vh">
+    <h2 style="text-align:center">打印预览</h2>
+    <div style="text-align:center;background:#e7eaee;border-radius:12px;padding:10px;max-height:56vh;overflow:auto">
+      <img id="prevImg" style="max-width:100%;border-radius:4px;box-shadow:0 2px 10px rgba(16,24,40,.15)" alt="">
+      <div id="prevLoad" hidden style="padding:44px 0;color:var(--sub);font-size:14px">正在生成预览…</div>
+      <div id="prevErr" hidden style="padding:34px 10px;color:#b42318;font-size:14px;line-height:1.6"></div>
+    </div>
+    <div id="prevCnt" style="text-align:center;font-size:12px;color:var(--sub);margin:8px 0 2px"></div>
+    <div class="row2" style="margin-top:6px">
+      <button class="btn ghost" onclick="prevStep()">◀ 上一页</button>
+      <button class="btn ghost" onclick="nextStep()">下一页 ▶</button>
+    </div>
+    <button class="btn primary wide" style="margin-top:10px" onclick="closePreview()">关 闭</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const S = {
+  jobs: [], hist: [], papers: [], busy:false,
+  opts:{mode:'native', color:'color',paper:'A4',orientation:'auto',copies:1,layout:'fit',quality:'standard',duplex:'off',
+        marginPreset:'none', margin:{t:0,b:0,l:0,r:0}}
+};
+const $ = s => document.querySelector(s);
+window.S = S;   // const 声明不会自动挂到 window，后面的 editor.js 靠这个拿到状态
+
+function toast(msg, ms=2400){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'), ms);
+}
+function fmtSize(b){
+  if(!b) return '';
+  if(b<1024) return b+' B';
+  if(b<1048576) return (b/1024).toFixed(0)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+/* ---------- 初始化 ---------- */
+async function init(){
+  try{
+    const r = await fetch('/api/state').then(x=>x.json());
+    S.papers = r.papers || [];
+    const sel=$('#paper');
+    sel.innerHTML = (S.papers||[]).map(p=>`<option value="${p.key}">${p.label}</option>`).join('');
+    sel.value='A4';
+    updateStatus(r);
+  }catch(e){ $('#printerLine').textContent='连不上电脑上的服务'; }
+  setInterval(refreshStatus, 5000);
+}
+function updateStatus(r){
+  const d=$('#dot'), online=(r.state==='就绪'||r.state==='打印中') && r.online!==false;
+  d.className='dot'+(online?'':(r.jobs>0?' busy':' off'));
+  $('#printerLine').textContent = `${r.name||'打印机'} · ${r.state}` + (r.jobs?` · 队列${r.jobs}`:'');
+}
+async function refreshStatus(){
+  try{ updateStatus(await fetch('/api/state').then(x=>x.json())); }catch(e){}
+}
+
+/* ---------- 选项 ---------- */
+function toggleOpts(){ $('#opts').classList.toggle('open'); }
+document.querySelectorAll('.seg[data-key]').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    S.opts[seg.dataset.key]=b.dataset.v;
+    syncSummary(); refreshThumbs(); syncModeHints();
+  });
+});
+
+// 两套打印模式下，「纸张 / 排版 / 页边距」的含义完全不同，提示必须跟着切换，
+// 否则用户会以为自己设了边距，实际要么被忽略（直印），要么被叠加（网页排版）。
+function syncModeHints(){
+  const native = (S.opts.mode || 'native') === 'native';
+  const off = native
+    ? '原文件直印时这项由 Word / Excel / PPT 文档自己决定，改这里不会影响它们。'
+    : '';
+  const reflow = !native && S.opts.layout === 'reflow';
+  const ph = $('#paperHint'), lh = $('#layoutHint'), mh = $('#marginHint');
+  if(ph) ph.innerHTML = native
+    ? '原文件直印时纸张大小由文档本身决定（改用 A4 请先在 Word 里改页面设置）。PDF 和图片仍按这里走。'
+    : '通常保持 A4。照片打印可选 4R / 5R。';
+  if(lh) lh.innerHTML = native
+    ? off + '只对 PDF、图片生效。'
+    : '「适应」整页放进纸张，<b>文件自带的页边距原样保留</b>；「填满」铺满但可能<b>裁掉边缘</b>；'
+      + '「原图」按原始物理尺寸；「<b>重排放大</b>」先剥掉文件自带的白边，再按下面的页边距等比放大。';
+  if(!mh) return;
+  if(native){ mh.innerHTML = off + '对 PDF 也一样——PDF 走的是网页排版。'; return; }
+  const mp = S.opts.marginPreset || 'none', m = S.opts.margin || {};
+  const size = mp==='none' ? '' : `<br>当前：上 ${m.t||0} / 下 ${m.b||0} / 左 ${m.l||0} / 右 ${m.r||0} mm`;
+  mh.innerHTML = reflow
+    ? '重排模式：这里设多少，印出来就留多少；<b>边距调小，内容就等比放大</b>，'
+      + '选「贴边」放到打印机能打到的最大范围。内容不足半页（比如只有几行的表格）会自动放弃放大。' + size
+    : '当前是「整页适应」：PDF / Word 转出来的页面<b>本来就带页边距</b>，这里再选会<b>叠加一层</b>、内容变小。'
+      + '要跟原件一致选「<b>贴边</b>」；要按这里调边距并让内容跟着放大，排版方式改选「<b>重排放大</b>」。' + size;
+}
+document.querySelectorAll('#ptSeg').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); S._pt=b.dataset.v;
+  });
+});
+$('#paper').addEventListener('change', e=>{ S.opts.paper=e.target.value; syncSummary(); refreshThumbs(); });
+function bump(d){ S.opts.copies=Math.max(1,Math.min(99,S.opts.copies+d)); $('#copies').textContent=S.opts.copies; syncSummary(); }
+function syncSummary(){
+  const c=S.opts.color==='mono'?'黑白':'彩色';
+  const p=(S.papers.find(x=>x.key===S.opts.paper)||{short:S.opts.paper}).short;
+  const m=S.opts.mode==='native'?'原样直印':'网页排版';
+  $('#optSum').textContent = `${m} · ${c} · ${p} · ${S.opts.copies} 份`;
+}
+
+/* ---------- 文件 ---------- */
+$('#filePick').addEventListener('change', async e=>{
+  const files=[...e.target.files];
+  e.target.value='';
+  for(const f of files) await upload(f);
+});
+async function upload(f){
+  toast(`正在处理 ${f.name}…`, 8000);
+  try{
+    const r = await fetch('/api/upload',{
+      method:'POST',
+      headers:{'X-File-Name':encodeURIComponent(f.name)},
+      body:f
+    }).then(x=>x.json());
+    if(r.error){ toast('❌ '+r.error, 3600); return; }
+    S.jobs.push(r.job); render();
+    toast('✅ 已加入队列');
+  }catch(err){ toast('❌ 上传失败：'+err, 3600); }
+}
+
+/* ---------- 文字 ---------- */
+function openText(){ S._pt='12'; $('#textInput').value=''; $('#textMask').classList.add('show'); }
+function closeText(){ $('#textMask').classList.remove('show'); }
+async function submitText(){
+  const t=$('#textInput').value.trim();
+  if(!t){ toast('还没写字呢'); return; }
+  closeText();
+  try{
+    const r=await fetch('/api/text',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:t, fontPt:parseInt(S._pt||'12')})}).then(x=>x.json());
+    if(r.error){ toast('❌ '+r.error); return; }
+    S.jobs.push(r.job); render(); toast('✅ 已加入队列');
+  }catch(e){ toast('❌ 失败：'+e); }
+}
+
+/* ---------- 微信文件（自助打印） ---------- */
+const WX = {files:[], sel:new Set(), mode:'new', hours:24, q:'', timer:null, _t:null, sig:'',
+            since:0, tab:'file', sess:'', sessions:[]};
+const WX_LS = 'printserver_wx_since';
+const WX_LS_IMG = 'printserver_wx_img_since';
+
+const WX_TIP = {
+  file: '用法：微信里长按消息 →「多选」→ 转发到「文件传输助手」，回到这里，新到的就在「新到的」里了。<br>打完点「收完了」，列表清空等下一批。列表每 10 秒自动刷新。',
+  img:  '聊天里的图片这边能直接读到——选好会话或时间范围，勾选后加入队列。<br><b>画质要看一眼标签</b>：微信在本地存的多数是<b>压缩过的图</b>，标「偏软」的说明像素偏低，打小尺寸才清楚；要高清就在微信里<b>以文件形式</b>再发一次，或直接用手机上传原图。'
+};
+
+// 「收件箱」的进度记在手机上：只列这个时间戳以后落盘的文件。
+// 微信的落地目录不分会话，靠它来等效隔离「刚转发过来的那一批」。
+// 文件和图片的「收到哪儿了」各记一份，互不干扰
+function wxLsKey(){ return WX.tab==='img' ? WX_LS_IMG : WX_LS; }
+function wxLoadSince(){
+  try{ return parseFloat(localStorage.getItem(wxLsKey())||'0')||0; }catch(e){ return 0; }
+}
+function wxSaveSince(t){ try{ localStorage.setItem(wxLsKey(), String(t)); }catch(e){} }
+function wxSinceText(){
+  if(WX.mode!=='new') return '';
+  const d=new Date(WX.since*1000), p=n=>String(n).padStart(2,'0');
+  return '只看 ' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' '
+       + p(d.getHours()) + ':' + p(d.getMinutes()) + ' 之后新到的';
+}
+
+async function openWechat(){
+  $('#wxMask').classList.add('show');
+  WX.sel.clear(); WX.q=''; WX.sig=''; WX.tab='file'; WX.sess='';
+  $('#wxSearch').value='';
+  WX.mode='new';
+  WX.since = wxLoadSince() || (Date.now()/1000 - 86400);
+  document.querySelectorAll('#wxRange button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.h==='new');
+  });
+  wxSyncTabUI();
+  await loadWxStatus();
+  await loadWxSessions();
+  await loadWxList();
+  clearInterval(WX.timer);
+  // 开着的时候每 10 秒自动看一眼：在微信里发过来的文件过几秒就自己冒出来
+  WX.timer = setInterval(()=>{ if($('#wxMask').classList.contains('show')) loadWxList(); }, 10000);
+}
+
+// 切到「图片」时把九宫格和会话下拉拉出来，文件列表收起来
+function wxSyncTabUI(){
+  const img = WX.tab==='img';
+  document.querySelectorAll('#wxTab button').forEach(b=>b.classList.toggle('on', b.dataset.t===WX.tab));
+  $('#wxList').style.display = img ? 'none' : '';
+  $('#wxGrid').style.display = img ? 'grid' : 'none';
+  $('#wxSess').style.display = img ? '' : 'none';
+  $('#wxSearch').placeholder = img ? '搜图片名（会话/日期）…' : '搜文件名…';
+  $('#wxTip').innerHTML = WX_TIP[WX.tab] || '';
+}
+document.querySelectorAll('#wxTab').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    if(b.dataset.t===WX.tab) return;
+    WX.tab = b.dataset.t;
+    WX.sel.clear(); WX.sig='';
+    WX.mode='new';
+    WX.since = wxLoadSince() || (Date.now()/1000 - 86400);
+    document.querySelectorAll('#wxRange button').forEach(x=>x.classList.toggle('on', x.dataset.h==='new'));
+    wxSyncTabUI();
+    loadWxList();
+  });
+});
+$('#wxSess').addEventListener('change', e=>{
+  WX.sess = e.target.value; WX.sig='';
+  loadWxList();
+});
+
+async function loadWxSessions(){
+  try{
+    const r = await fetch('/api/wechat/sessions').then(x=>x.json());
+    WX.sessions = r.sessions||[];
+    const fh = r.filehelper;
+    const opts = ['<option value="">全部会话</option>'];
+    if(WX.sessions.some(s=>s.id===fh)) opts.push('<option value="'+fh+'">★ 文件传输助手</option>');
+    for(const s of WX.sessions){
+      if(s.id===fh) continue;
+      opts.push('<option value="'+s.id+'">'+(s.name||('会话 '+s.id.slice(0,6)))+'（'+s.count+'）</option>');
+    }
+    $('#wxSess').innerHTML = opts.join('');
+    $('#wxSess').value = WX.sess||'';
+  }catch(e){}
+}
+function closeWechat(){ $('#wxMask').classList.remove('show'); clearInterval(WX.timer); WX.timer=null; }
+
+async function loadWxStatus(){
+  try{
+    const r = await fetch('/api/wechat/status').then(x=>x.json());
+    if(!r.ok){
+      $('#wxStatus').innerHTML = '⚠️ 没找到微信的数据目录。电脑版微信要先登录过一次，聊天文件才会存到本机。';
+      return;
+    }
+    const total = (r.roots||[]).reduce((a,b)=>a+(b.files||0),0);
+    const d = (r.roots||[])[0] || {};
+    $('#wxStatus').innerHTML =
+      (r.running ? '<span class="tag ok">微信在线</span> ' : '<span class="tag warn">微信没运行</span> ')
+      + '本地共 ' + total + ' 个聊天文件 · ' + escapeHtml(d.dir||'');
+  }catch(e){ $('#wxStatus').textContent = '读不到微信文件：'+e; }
+}
+
+function loadWxList(){
+  return WX.tab==='img' ? loadWxImages() : loadWxFiles();
+}
+
+async function loadWxFiles(){
+  try{
+    const qs = WX.mode==='new' ? ('hours=0&since='+WX.since) : ('hours='+WX.hours);
+    const r = await fetch('/api/wechat/files?'+qs+'&limit=120&q='+encodeURIComponent(WX.q))
+                .then(x=>x.json());
+    if(r.error){ $('#wxList').innerHTML='<div class="empty">'+escapeHtml(r.error)+'</div>'; return; }
+    WX.files = r.files||[];
+    renderWx();
+  }catch(e){ $('#wxList').innerHTML='<div class="empty">读不到微信文件：'+e+'</div>'; }
+}
+
+async function loadWxImages(){
+  try{
+    let qs;
+    if(WX.mode==='new') qs = 'hours=0&since='+WX.since;
+    else qs = 'hours='+WX.hours;
+    if(WX.sess) qs += '&session='+encodeURIComponent(WX.sess);
+    qs += '&limit=120&q='+encodeURIComponent(WX.q);
+    const r = await fetch('/api/wechat/images?'+qs).then(x=>x.json());
+    if(r.error){ $('#wxGrid').innerHTML='<div class="empty">'+escapeHtml(r.error)+'</div>'; return; }
+    WX.files = r.images||[];
+    renderWx();
+  }catch(e){ $('#wxGrid').innerHTML='<div class="empty">读不到微信图片：'+e+'</div>'; }
+}
+
+function wxTag(f){
+  const e=(f.ext||'').toLowerCase();
+  if(e==='pdf') return 'PDF';
+  if(['doc','docx','rtf','odt'].includes(e)) return 'WORD';
+  if(['xls','xlsx','csv'].includes(e)) return 'EXCEL';
+  if(['ppt','pptx'].includes(e)) return 'PPT';
+  if(f.kind==='image') return '图';
+  return (e||'文件').toUpperCase().slice(0,4);
+}
+function wxUpdateCount(){
+  const n=WX.sel.size;
+  $('#wxImport').textContent = n? `加入队列（${n}）` : '加入队列';
+  $('#wxCount').textContent = WX.files.length? `共 ${WX.files.length} 个 · 已选 ${n}` : '';
+}
+
+function renderWx(){
+  return WX.tab==='img' ? renderWxImg() : renderWxFiles();
+}
+
+function renderWxFiles(){
+  const box=$('#wxList');
+  $('#wxSince').textContent = wxSinceText();
+  // 列表没变就别重画——不然自动刷新会把用户滚到一半的列表弹回顶部
+  const sig = WX.files.map(f=>f.id+f.mtime).join(',') + '|' + [...WX.sel].sort().join(',');
+  if(sig===WX.sig) return;
+  WX.sig = sig;
+  const top = box.scrollTop;
+  if(!WX.files.length){
+    box.innerHTML='<div class="empty"><span class="big">💬</span>这段时间没收到文件<br><span style="font-size:12px">换个时间范围，或先在微信里给自己发一个</span></div>';
+  }else{
+    box.innerHTML = WX.files.map(f=>{
+      const on = WX.sel.has(f.id);
+      const ico = f.kind==='image'
+        ? `<div class="wxbadge image" style="position:relative">图<img src="/api/wechat/thumb/${f.id}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()"></div>`
+        : `<div class="wxbadge ${f.kind||'other'}">${wxTag(f)}</div>`;
+      return `<div class="wxitem${on?' on':''}" data-id="${f.id}">
+        <div class="wxpick">${on?'✓':''}</div>
+        ${ico}
+        <div class="fname">
+          <b>${escapeHtml(f.name)}${f.fresh?'<span class="wxfresh">新</span>':''}</b>
+          <small>${f.time} · ${fmtSize(f.size)}</small>
+        </div>
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.wxitem').forEach(el=>{
+      el.onclick=()=>{
+        const id=el.dataset.id;
+        if(WX.sel.has(id)) WX.sel.delete(id); else WX.sel.add(id);
+        renderWx();
+      };
+    });
+  }
+  wxUpdateCount();
+  box.scrollTop = top;
+}
+
+// 图片用九宫格：先看清是哪张，再决定要不要打
+function renderWxImg(){
+  const box=$('#wxGrid');
+  $('#wxSince').textContent = wxSinceText();
+  const sig = 'i'+WX.files.map(f=>f.id).join(',') + '|' + [...WX.sel].sort().join(',');
+  if(sig===WX.sig) return;
+  WX.sig = sig;
+  const top = box.scrollTop;
+  if(!WX.files.length){
+    box.style.display='block';
+    box.innerHTML='<div class="empty" style="grid-column:1/-1"><span class="big">🖼️</span>这段时间没有图片<br><span style="font-size:12px">换个时间范围，或在微信里发张图试试</span></div>';
+  }else{
+    box.style.display='grid';
+    box.innerHTML = WX.files.map(f=>{
+      const on = WX.sel.has(f.id);
+      const who = f.sessionName || (f.session? '会话 '+f.session.slice(0,6) : (f.source==='favorite'?'微信收藏':'微信图片'));
+      const q = f.quality || '';
+      const qcls = q==='清晰' ? '#12a150' : (q==='一般' ? '#c2410c' : '#9ca3af');
+      return `<div class="wxcell${on?' on':''}" data-id="${f.id}">
+        <img src="/api/wechat/thumb/${f.id}" alt="" loading="lazy">
+        <span class="qbar" style="background:${qcls}">${escapeHtml(q)}</span>
+        <span class="tick">${on?'✓':''}</span>
+        <div class="meta">
+          <div class="who">${escapeHtml(who)}${f.fresh?'<span class="wxfresh">新</span>':''}</div>
+          <div class="dim">${f.time} · ${f.w}×${f.h}</div>
+          <div class="dim">A4 ${f.a4dpi}dpi${f.suggestPaper!=='A4'?' · 建议 '+f.suggestPaper:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.wxcell').forEach(el=>{
+      el.onclick=()=>{
+        const id=el.dataset.id;
+        if(WX.sel.has(id)) WX.sel.delete(id); else WX.sel.add(id);
+        renderWx();
+      };
+    });
+  }
+  wxUpdateCount();
+  box.scrollTop = top;
+}
+function wxSelectAll(on){
+  // 只动当前列表里看得见的那些，避免把上一次筛选残留的旧选中项一起带进来
+  WX.sel.clear();
+  if(on) WX.files.forEach(f=>WX.sel.add(f.id));
+  renderWx();
+}
+function wxMarkDone(){
+  // 手动把收件箱归零：这一批不要了 / 已经处理完了，等下一批
+  const t = Date.now()/1000;
+  wxSaveSince(t); WX.since = t; WX.sel.clear(); WX.sig='';
+  toast('收件箱已清空，下一批新到的会自己冒出来', 2200);
+  loadWxList();
+}
+document.querySelectorAll('#wxRange').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    WX.sig='';
+    if(b.dataset.h==='new'){
+      WX.mode='new';
+      WX.since = wxLoadSince() || (Date.now()/1000 - 86400);
+    }else{
+      WX.mode='hours'; WX.hours = b.dataset.h;
+    }
+    loadWxList();
+  });
+});
+$('#wxSearch').addEventListener('input', e=>{
+  clearTimeout(WX._t);
+  WX._t=setTimeout(()=>{ WX.q=e.target.value.trim(); WX.sig=''; loadWxList(); }, 350);
+});
+
+async function importWx(){
+  const ids=[...WX.sel];
+  if(!ids.length){ toast(WX.tab==='img'?'先勾选要打印的图片':'先勾选要打印的文件'); return; }
+  toast('正在取'+(WX.tab==='img'?'图片':'文件')+'…', 8000);
+  try{
+    const r=await fetch('/api/wechat/import',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})}).then(x=>x.json());
+    if(r.error){ toast('❌ '+r.error, 3200); return; }
+    const got=r.jobs||[];
+    // 只有把列表全都取走了才自动归零。部分选择时不动进度，
+    // 免得剩下那几个被一起藏起来（同一批转发过来的文件 mtime 是同一个值）。
+    const takenSet = new Set(ids);
+    if(!WX.files.some(f=>!takenSet.has(f.id))){
+      const t = Date.now()/1000;
+      wxSaveSince(t); WX.since = t;
+    }
+    got.forEach(j=>S.jobs.push(j));
+    render();
+    closeWechat();
+    if(got.length) toast('✅ 已加入 '+got.length+' 个'+(WX.tab==='img'?'图片':'文件'), 2600);
+    if((r.errors||[]).length) setTimeout(()=>toast('⚠️ '+r.errors[0], 3600), 500);
+  }catch(e){ toast('❌ 取文件失败：'+e, 3200); }
+}
+
+/* ---------- 列表 ---------- */
+function render(){
+  const box=$('#list');
+  if(!S.jobs.length){
+    box.innerHTML='<div class="empty"><span class="big">🗂️</span>还没有选择文件</div>';
+  }else{
+    box.innerHTML = S.jobs.map((j,i)=>`
+      <div class="file">
+        <img class="thumb" src="${thumbUrl(j)}" alt=""
+             onerror="this.style.background='#eef0f2'">
+        <div class="fname">
+          <b>${escapeHtml(j.name)}</b>
+          <small>${kindText(j.kind)} · ${j.pages} 页${j.size?' · '+fmtSize(j.size):''}</small>
+        </div>
+        <button class="del" data-del="${j.id}">×</button>
+      </div>`).join('');
+  }
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    S.jobs=S.jobs.filter(x=>x.id!==b.dataset.del); render();
+  });
+  const pages = S.jobs.reduce((a,b)=>a+b.pages,0);
+  const n=S.jobs.length;
+  $('#cntTotal').textContent = n?`共 ${n} 项 / ${pages} 页`:'';
+  $('#fmetaL').textContent = n?`${n} 个文件 · ${pages} 页`:'未选择文件';
+  $('#fmetaR').textContent = S.opts.copies>1?`共 ${pages*S.opts.copies} 页`:'';
+  $('#printBtn').disabled = !n || S.busy;
+  $('#printBtn').textContent = S.busy?'正在打印…':(n?`打印 ${pages} 页`:'打印');
+  const le=$('#layoutEntry'); if(le) le.hidden = !n;
+}
+function thumbUrl(j){
+  const q=new URLSearchParams(S.opts);
+  q.set('_',Math.round(j.created*10));
+  return `/api/preview/${j.id}/0?${q.toString()}`;
+}
+function refreshThumbs(){
+  document.querySelectorAll('.file').forEach((el,i)=>{
+    const img=el.querySelector('img'); if(img&&S.jobs[i]) img.src=thumbUrl(S.jobs[i]);
+  });
+}
+function kindText(k){
+  return {image:'图片',pdf:'PDF',office:'文档',text:'文字'}[k]||k;
+}
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- 打印 ---------- */
+async function doPrint(){ await runPrint('all'); }
+
+async function runPrint(phase){
+  if(S.busy || !S.jobs.length) return;
+  S.busy=true; render();
+  const duplex = S.opts.duplex && S.opts.duplex!=='off';
+  // 手动双面：「all」要拆成 先奇数页 → 停下等你翻面 → 再偶数页。
+  // 之前这里直接把 phase:'all' 发过去，等于一口气全打完才提示翻面。
+  const first = (duplex && phase==='all') ? 'odd' : phase;
+  showProgress('正在打印', first==='odd'?'先打印奇数页…':'准备中…', 0);
+  try{
+    const r=await fetch('/api/print',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({jobIds:S.jobs.map(j=>j.id), options:{...S.opts, phase:first}})
+    }).then(x=>x.json());
+    if(r.error){ throw new Error(r.error); }
+    const ok = await poll(r.taskId);
+    if(!ok) return;
+    if(duplex && first==='odd'){
+      finishWaitFlip();   // 停下等翻面，偶数页由 continueEven() 发
+      return;
+    }
+    finishDone(); return;
+  }catch(e){
+    doneProgress(false,'❌ '+e.message);
+  }finally{
+    S.busy=false; render();
+  }
+}
+function finishWaitFlip(){
+  S.busy=false; render();
+  $('#spin').classList.add('hidden');
+  $('#progTitle').textContent='请把纸翻面';
+  $('#progMsg').innerHTML='奇数页已打印完成。<br>把出纸的那叠纸<b>整体翻面</b>放回进纸器，然后点下面的按钮打偶数页。';
+  $('#bar').style.width='100%';
+  $('#progAfter').classList.remove('hidden');
+  $('#progAfter').innerHTML=`<button class="btn primary wide" onclick="continueEven()">继续打印偶数页</button>
+    <button class="btn ghost wide" style="margin-top:10px" onclick="closeProgress()">先这样，算了</button>`;
+}
+async function continueEven(){
+  closeProgress();
+  S.busy=true; render();
+  showProgress('正在打印偶数页','准备中…',0);
+  try{
+    const r=await fetch('/api/print',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({jobIds:S.jobs.map(j=>j.id), options:{...S.opts, phase:'even'}})
+    }).then(x=>x.json());
+    if(await poll(r.taskId)) finishDone();
+  }catch(e){ doneProgress(false,'❌ '+e.message); }
+  finally{ S.busy=false; render(); }
+}
+function finishDone(){
+  const pages=S.jobs.reduce((a,b)=>a+b.pages,0)*S.opts.copies;
+  S.hist = [...S.jobs, ...S.hist].slice(0,8);
+  S.jobs=[]; render(); renderHist();
+  $('#spin').classList.add('hidden');
+  $('#progTitle').textContent='✅ 已发送到打印机';
+  $('#progMsg').textContent=`共 ${pages} 页，正在出纸。`;
+  $('#bar').style.width='100%';
+  $('#progAfter').classList.remove('hidden');
+  $('#progAfter').innerHTML='<button class="btn primary wide" onclick="closeProgress()">好</button>';
+  setTimeout(closeProgress, 3500);
+}
+
+function showProgress(t,m,p){
+  $('#progMask').classList.add('show');
+  $('#spin').classList.remove('hidden');
+  $('#progTitle').textContent=t; $('#progMsg').textContent=m;
+  $('#bar').style.width=p+'%';
+  $('#progAfter').classList.add('hidden');
+}
+function doneProgress(ok,msg){
+  $('#spin').classList.add('hidden');
+  $('#progTitle').textContent = ok?'✅ 完成':'打印失败';
+  $('#progMsg').textContent=msg;
+  $('#progAfter').classList.remove('hidden');
+  $('#progAfter').innerHTML='<button class="btn primary wide" onclick="closeProgress()">关闭</button>';
+}
+function closeProgress(){ $('#progMask').classList.remove('show'); }
+async function poll(id){
+  for(let i=0;i<300;i++){
+    const t=await fetch('/api/progress/'+id).then(x=>x.json());
+    if(t.state==='error'){ doneProgress(false,'❌ '+(t.error||'未知错误')); return false; }
+    if(t.state==='done'){
+      $('#bar').style.width='100%';
+      $('#progMsg').textContent = `已下发 ${t.pages} 页，打印机正在出纸…`;
+      return true;
+    }
+    const pct = t.total ? Math.min(96, Math.round(t.done/t.total*100)) : 10+i%20;
+    $('#bar').style.width = pct+'%';
+    $('#progMsg').textContent = t.total? `正在准备第 ${t.done}/${t.total} 页…` : '准备中…';
+    await new Promise(r=>setTimeout(r,600));
+  }
+  doneProgress(false,'⏱ 超时了，看一下电脑上的服务是否还活着');
+  return false;
+}
+
+/* ---------- 测试页 / 信息 ---------- */
+async function doTest(){
+  showProgress('打印测试页','正在准备…',10);
+  const r=await fetch('/api/testpage',{method:'POST'}).then(x=>x.json());
+  await poll(r.taskId);
+}
+async function showInfo(){
+  const r=await fetch('/api/info').then(x=>x.json());
+  $('#infoBody').innerHTML=`
+    <div class="kv"><span>打印机</span><b>${r.printer}</b></div>
+    <div class="kv"><span>网址</span><b style="font-family:monospace">http://${r.ip}:${r.port}</b></div>
+    <div class="kv"><span>电脑</span><b>${r.host}</b></div>
+    <div class="hint">把这个网址加到手机浏览器书签或桌面，以后点一下就能用。<br>
+    打印时电脑需要保持开机且连着 WiFi，不需要碰键盘鼠标。</div>`;
+  $('#infoMask').classList.add('show');
+}
+function closeInfo(){ $('#infoMask').classList.remove('show'); }
+
+/* ---------- 历史 ---------- */
+function renderHist(){
+  if(!S.hist.length){ $('#histCard').hidden=true; return; }
+  $('#histCard').hidden=false;
+  $('#hist').innerHTML = S.hist.map(j=>`
+    <div class="file">
+      <div class="fname"><b>${escapeHtml(j.name)}</b><small>${j.pages} 页</small></div>
+      <button class="btn ghost" style="padding:8px 12px;font-size:13px"
+              onclick="reprint('${j.id}')">重印</button>
+    </div>`).join('');
+}
+function reprint(id){
+  const j=S.hist.find(x=>x.id===id); if(j){ S.jobs.push(j); render(); toast('已放回队列'); }
+}
+
+/* ---------- 页边距 / 打印预览 ---------- */
+const MARGIN_PRESETS = {
+  none:     { t: 0,    b: 0,    l: 0,    r: 0     },
+  narrow:   { t: 12.7, b: 12.7, l: 12.7, r: 12.7  },
+  moderate: { t: 25.4, b: 25.4, l: 19.05,r: 19.05 },
+  wide:     { t: 25.4, b: 25.4, l: 50.8, r: 50.8  },
+};
+function setMargin(p){
+  S.opts.marginPreset = p;
+  document.querySelectorAll('#marginSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===p));
+  $('#marginCustom').hidden = (p!=='custom');
+  if(p==='custom'){ applyCustomMargin(); return; }
+  S.opts.margin = Object.assign({t:0,b:0,l:0,r:0}, MARGIN_PRESETS[p]);
+  syncModeHints();        // 边距数值和模式说明统一由这里渲染，别各写各的
+  syncSummary();
+}
+function applyCustomMargin(){
+  const g=id=>{const v=parseFloat($(id).value); return isNaN(v)?0:Math.max(0,Math.min(60,v));};
+  S.opts.margin = { t:g('#mT'), b:g('#mB'), l:g('#mL'), r:g('#mR') };
+  syncModeHints();
+  syncSummary();
+}
+let prevList=[], prevIdx=0, prevToken=0;
+function isNativeDoc(kind){
+  // 原文件直印只对 Office 生效：版式由 Office 自己决定，网页上的缩放/边距不参与
+  return S.opts.mode==='native' && kind==='office';
+}
+function prevUrl(jid,i,kind){
+  const native=isNativeDoc(kind);
+  const m = native ? {t:0,b:0,l:0,r:0} : (S.opts.margin||{});
+  const layout = native ? 'natural' : (S.opts.layout||'fit');
+  const q=new URLSearchParams({paper:S.opts.paper, layout, color:S.opts.color,
+    orientation:S.opts.orientation, w:'1300',
+    mt:m.t||0, mr:m.r||0, mb:m.b||0, ml:m.l||0});
+  return `/api/preview/${jid}/${i}?${q.toString()}`;
+}
+function openPreview(){
+  prevList=[];
+  S.jobs.forEach(j=>{ const n=Math.max(1,j.pages||1); for(let i=0;i<n;i++) prevList.push([j.id,i,j.kind]); });
+  if(!prevList.length){ toast('先选择要打印的文件'); return; }
+  prevIdx=0; $('#prevMask').classList.add('show'); showPrev();
+}
+function showPrev(){
+  const pair=prevList[prevIdx]; if(!pair) return;
+  const [jid,i,kind]=pair;
+  const token = ++prevToken;              // 快速翻页时丢弃过期的回调
+  const img=$('#prevImg'), load=$('#prevLoad'), err=$('#prevErr');
+  err.hidden=true; load.hidden=false; img.style.visibility='hidden'; img.removeAttribute('src');
+  $('#prevCnt').textContent = `第 ${prevIdx+1} / ${prevList.length} 页 · ` +
+    (isNativeDoc(kind) ? '原文件直印效果（版式由 Office 决定）' : '与实际打印效果一致');
+  const im=new Image();
+  im.onload=()=>{
+    if(token!==prevToken) return;
+    img.src=im.src; img.style.visibility='visible'; load.hidden=true;
+    // 预取下一页，翻页时基本不用等
+    if(prevList.length>1){
+      const nx=prevList[(prevIdx+1)%prevList.length];
+      const p=new Image(); p.src=prevUrl(nx[0],nx[1],nx[2])+'&_='+Date.now();
+    }
+  };
+  im.onerror=()=>{
+    if(token!==prevToken) return;
+    load.hidden=true; err.hidden=false;
+    err.textContent='这一页预览没出来。可能是文档转换出问题了，也可以把打印方式切成「网页排版」再试。';
+  };
+  im.src = prevUrl(jid,i,kind)+'&_='+Date.now();
+}
+function prevStep(){ if(prevList.length){ prevIdx=(prevIdx-1+prevList.length)%prevList.length; showPrev(); } }
+function nextStep(){ if(prevList.length){ prevIdx=(prevIdx+1)%prevList.length; showPrev(); } }
+function closePreview(){ $('#prevMask').classList.remove('show'); }
+
+init(); render(); syncSummary(); syncModeHints();
+</script>
+<script src="/static/editor.js"></script>
+</body>
+</html>

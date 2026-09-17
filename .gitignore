@@ -1,0 +1,31 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 运行期产物（每次跑服务都会生成，不进版本库）----
+# 注意：gitignore 不支持行尾注释，模式后面别跟 # 说明，否则整行失效
+runtime/jobs/
+runtime/*.log
+runtime/config.json
+
+# 10MB 的嵌入式 Python，用 tools/fetch_pyembed.py 现下
+runtime/pyembed.zip
+
+# ---- 便携版打包产物（约 80MB，作为 GitHub Release 附件发布，不进 Git）----
+dist/
+
+# ---- 调试 / 临时文件 ----
+reflow_compare.png
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+*.swp

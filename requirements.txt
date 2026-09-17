@@ -1,0 +1,7 @@
+# 手机打印助手 · 源码运行依赖（Windows + Python 3.10 ~ 3.13）
+# 便携版不需要这些——便携版自带 runtime，见 docs/05-便携版打包.md
+
+Pillow>=10.0            # 图像解码 / 排版 / DIB 打包
+pypdfium2>=4.30         # PDF 渲染（无需额外装 Poppler）
+pywin32>=306            # win32print / win32ui / win32com，打印与 Office 直印都靠它
+pillow-heif>=0.16       # 可选：iPhone 的 HEIC 照片（不需要可删掉这行）
