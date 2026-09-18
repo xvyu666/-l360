@@ -67,7 +67,13 @@ def main():
     print("=" * 70)
     print("源 site-packages:", SP)
 
-    rmtree(os.path.join(HERE, "dist"))
+    # 这里不再整目录删 dist 了。原因很实际：
+    #   runtime/ 里是嵌入式 Python 加 site-packages，好几百 MB、上千个文件，
+    #   本机 safe-delete 见到 50 个以上的批量删除就要人工确认，整条打包流程
+    #   会当场卡死（实测就是这个现象）。
+    #   而且 runtime 几乎不变 —— 每次真正变的就是 app/ 下那几个自己写的 .py。
+    #   copy_tree 本来就是覆盖写，留着旧的 runtime 反而快得多。
+    # 真要从零重打：手工删掉 dist 目录再跑一次。
     os.makedirs(RUNTIME, exist_ok=True)
     os.makedirs(APP, exist_ok=True)
     os.makedirs(PKGS, exist_ok=True)
@@ -76,9 +82,12 @@ def main():
     zp = os.path.join(HERE, "runtime", "pyembed.zip")
     if not os.path.isfile(zp):
         raise SystemExit("缺少 runtime/pyembed.zip（嵌入式 Python），先下载了才能打包")
-    with zipfile.ZipFile(zp) as z:
-        z.extractall(RUNTIME)
-    print("  嵌入式 Python 解压到 runtime/")
+    if os.path.isfile(os.path.join(RUNTIME, "python.exe")):
+        print("  嵌入式 Python 已就位，跳过解压")
+    else:
+        with zipfile.ZipFile(zp) as z:
+            z.extractall(RUNTIME)
+        print("  嵌入式 Python 解压到 runtime/")
 
     # 2) 依赖
     for name in NEED_PKG:
@@ -153,8 +162,9 @@ def main():
             shutil.copy2(s, os.path.join(APP, f))
             n += 1
     print("   源码 %d 个 py" % n)
+    # dirs_exist_ok=True：重复打包时目标目录还在，否则 copytree 直接 FileExistsError
     shutil.copytree(os.path.join(HERE, "web"), os.path.join(APP, "web"),
-                    ignore=shutil.ignore_patterns(*SKIP_DIR))
+                    ignore=shutil.ignore_patterns(*SKIP_DIR), dirs_exist_ok=True)
     print("   web/ 已复制")
 
     # 5) 启动脚本（GBK 编码写 bat，中文注释才不乱码）

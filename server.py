@@ -926,6 +926,7 @@ class Handler(BaseHTTPRequestHandler):
             "ip": local_ip(),
             "port": self.server.server_port,
             "version": "1.0",
+            "features": supported_features(),
         })
 
     def api_preview(self, jid, index):
@@ -1425,6 +1426,30 @@ def start(port: int | None = None):
         pass
     finally:
         httpd.server_close()
+
+
+def supported_features():
+    """直接从「运行时真正加载的这段代码」里反查，当前进程支持哪些功能。
+
+    为什么非要这么做：
+        打印服务是个常驻进程。改完 server.py 忘了重启的话，老进程的内存里
+        根本没有新加的那几个路由，请求一律走到末尾返回 404 ——
+        现象是"手机 APP 传文件报电脑返回 404""网页面板看不到文件"，
+        光看现象完全分辨不出是代码错了还是进程旧了，往往要查半天。
+
+        这里用 inspect 读自己此刻的源码字符串来判定，老进程自然查不到
+        新路由，于是 /api/info 里就不会带上那个特性。
+
+    排查时只要看一眼 /api/info 的 features 数组：
+        少了 "inbox" → 进程是旧的，重启一下就好，代码没毛病。
+    """
+    try:
+        import inspect
+        src = inspect.getsource(Handler)
+    except Exception:
+        return []
+    names = ("inbox", "notes", "wechat")
+    return [n for n in names if "/api/%s/" % n in src]
 
 
 if __name__ == "__main__":
