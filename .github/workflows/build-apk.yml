@@ -1,9 +1,9 @@
 # 在 GitHub 云端编译安卓中转 APP 的 APK。
 #
-# 触发方式（三选一）：
-#   1. push 一个 v 开头的 tag（如 v1.0.0）→ 自动编译并挂到 Release
-#   2. 网页上 Actions → 本工作流 → Run workflow → 手动触发
-#   3. 提 PR 时也会跑一遍，验证代码能否编译
+# 触发方式：
+#   1. push 到 main / 提 PR → 编译一遍，产物留在 Artifacts（不挂 Release）
+#   2. push 一个 v 开头的 tag（如 v1.0.0）→ 编译并挂到 Release 附件
+#   3. 网页上 Actions → 本工作流 → Run workflow → 手动触发
 #
 # 这样电脑端完全不用装 Android Studio（那玩意要下 1.5GB+ SDK）。
 
@@ -12,6 +12,7 @@ name: 构建安卓中转 APK
 on:
   workflow_dispatch:
   push:
+    branches: ["main"]
     tags: ["v*"]
   pull_request:
 
@@ -21,6 +22,11 @@ jobs:
     # 只是打包，不需要任何特权
     permissions:
       contents: write
+
+    # runner 镜像自带 Android SDK，这里显式钉住路径，别依赖第三方 action 去猜
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: 检出代码
@@ -33,15 +39,27 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 确保 ANDROID_HOME / cmdline-tools 就位（runner 镜像自带，这步兜底）
-      - name: 准备 Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 Android SDK 组件（API 34）
+      # 不用 android-actions/setup-android：它会自己去 dl.google.com 拉
+      # cmdline-tools，这一步经常失败（实测 v3 卡在这一 step 报红）。
+      # ubuntu runner 镜像本来就预装了完整 SDK，直接用。
+      - name: 确认 Android SDK 可用
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          set -e
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -d "$ANDROID_HOME" || { echo "::error::镜像里没有 Android SDK"; exit 1; }
+          ls "$ANDROID_HOME"
+          echo "sdk.dir=$ANDROID_HOME" > android-relay/local.properties
+
+      - name: 装齐 API 34 组件
+        run: |
+          SM="$(command -v sdkmanager || true)"
+          # 注意别写成 `[ -z "$SM" ] && SM=...`：Actions 默认 bash -e，
+          # 测试为假时整条复合命令返回非 0，会被当成失败直接终止
+          if [ -z "$SM" ]; then SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"; fi
+          ls -l "$SM" || { echo "::error::找不到 sdkmanager"; exit 1; }
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          "$SM" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
 
       # 仓库里只有 gradle-wrapper.properties，没有 gradlew 脚本，
       # 所以这里直接装一个和项目匹配的 Gradle 8.7。
@@ -67,7 +85,7 @@ jobs:
             android-relay/app/build/outputs/apk/release/app-release.apk
           retention-days: 90
 
-      # 只在打 tag 时才挂 Release，PR 触发时跳过
+      # 只在打 tag 时才挂 Release，push main / PR 时跳过
       - name: 挂到 Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
