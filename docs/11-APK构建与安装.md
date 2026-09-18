@@ -1,10 +1,10 @@
 # 11 · APK 能不能打出来？（构建 → 传手机 → 装好）
 
-> 直说结论：**工程本身已经完备，现在就能产出可安装 APK**，
-> 前提是给它一个够格的构建环境（JDK 17 + Android SDK + Gradle 8.7）。
-> 本机目前**没有**这三样，所以主路是用 GitHub 云端编译。
+> 直说结论：**工程本身已经完备，APK 已经实际构建出来并通过官方签名校验。**
 >
-> 如果你只想「拿到一个能装的 APK」，看 §2.1 三条命令就够了。
+> 两条路都已跑通：**GitHub 云端**（三条命令），或**本机一键** `python tools/build_apk.py`
+> （自动下载 JDK 17 / Android SDK / Gradle 8.7 装到 `C:\android-kit`）。
+> 想要立刻拿到安装包，直接看 §3 的产物路径。
 
 ---
 
@@ -30,9 +30,9 @@
 
 | 缺口 | 影响 | 现状 |
 | --- | --- | --- |
-| **构建环境**（JDK 17 + Android SDK + Gradle 8.7） | 本机无法就地敲命令出包 | ❌ 本机三者都没有 → 走云端 |
-| **`gradlew` / `gradle-wrapper.jar`** | 无法 `./gradlew assembleDebug` | ⚠️ 仓库里只有 `gradle-wrapper.properties`。云端工作流已用系统 gradle 绕过；本地用 Android Studio 打开会自动生成 |
-| **release 签名配置** | `assembleRelease` 会产出**装不上**的 `app-release-unsigned.apk` | ✅ 刚补：无 keystore 时自动回落 debug 签名 |
+| **构建环境**（JDK 17 + Android SDK + Gradle 8.7） | 本机原本无法就地出包 | ✅ `tools/build_apk.py` 一键装到 `C:\android-kit` 并编译（实测 20 分钟内全绿） |
+| **`gradlew` / `gradle-wrapper.jar`** | 无法 `./gradlew assembleDebug` | ⚠️ 仓库里只有 `gradle-wrapper.properties`。云端用系统 gradle 绕过；本地脚本同样直接用 Gradle 8.7 |
+| **release 签名配置** | `assembleRelease` 会产出**装不上**的 `app-release-unsigned.apk` | ✅ 已补：无 keystore 时自动回落 debug 签名 |
 | 应用图标（自适应） | 部分桌面 launcher 上图标可能不显示 | ⚠️ 用的是矢量 drawable，非 `mipmap-anydpi` 自适应图标。不影响安装和运行 |
 
 > 三个缺口里只有「构建环境」是真门槛，而且它不在仓库里、在你机器上。
@@ -60,13 +60,29 @@ git push origin v1.0.0
 
 云端用的是 `gradle -p android-relay assembleDebug assembleRelease`，绕开缺失的 wrapper 脚本。
 
-### 2.2 路线 B：本地命令行（要有 JDK 17 + Android SDK）
+### 2.2 路线 B：本机一键脚本（推荐，云端之外的第二选择）
 
 ```bash
-# 前置：JDK 17（AGP 8.5 的硬要求，低了直接报错）
-#        ANDROID_HOME 指向 SDK，且有 platforms;android-34、build-tools;34.0.0
-#        Gradle 8.7（或用你自己装的 gradle 执行一次 `gradle wrapper` 生成 gradlew）
+python tools/build_apk.py
+```
 
+它会自己下载 JDK 17、Android SDK（API 34 + build-tools）、Gradle 8.7 装到
+**`C:\android-kit`**（纯 ASCII 路径），然后编译，最后把 APK 拷回原工程的输出目录。
+不写注册表、不改系统 PATH，不需要 Android Studio。第二次运行会跳过已装好的部分。
+
+```bash
+python tools/build_apk.py --check    # 只看工具链是否齐备
+python tools/build_apk.py --debug    # 只出 debug 包
+```
+
+> **为什么工具装在 `C:\android-kit` 而不是用户目录**：AGP 见到非 ASCII 的项目路径会直接拒绝构建
+> （报错 `Your project path contains non-ASCII characters`，见 b.android.com/95744）。
+> 中文用户名正是这种情况。脚本因此额外把工程复制到 ASCII 目录再编，
+> 项目里也加了 `android.overridePathCheck=true` 兜底。
+
+### 2.3 路线 C：本地命令行（已自行配好 JDK + SDK 时）
+
+```bash
 cd android-relay
 gradle assembleDebug             # 出 debug 包
 gradle assembleRelease           # 出 release 包（无 keystore 时自动退化成 debug 签名）
@@ -79,7 +95,7 @@ make-keystore.bat                # 生成 keystore.jks + signing.properties
 gradle assembleRelease
 ```
 
-### 2.3 路线 C：Android Studio
+### 2.4 路线 D：Android Studio
 
 `File → Open` 选 **`android-relay`**（子目录，不是仓库根）→ 等同步完
 → `Build → Build Bundle(s) / APK(s) → Build APK(s)` → 右下角弹窗 `locate`。
@@ -90,15 +106,28 @@ Studio 会自动把缺失的 `gradlew` / `gradle-wrapper.jar` 补齐。
 
 ## 3. 产物在哪
 
-| 构建 | 产物路径 | 大小 |
+| 构建 | 产物路径 | 实测大小 |
 | --- | --- | --- |
-| Debug | `android-relay/app/build/outputs/apk/debug/app-debug.apk` | 约 100 KB |
-| Release | `android-relay/app/build/outputs/apk/release/app-release.apk` | 约 100 KB |
+| Debug | `android-relay/app/build/outputs/apk/debug/app-debug.apk` | **20 KB** |
+| Release | `android-relay/app/build/outputs/apk/release/app-release.apk` | **19 KB** |
 
+本机用 `tools/build_apk.py` 构建时产物就落在上面这两个路径；
 云端构建的产物不落本机，从 Actions 的 Artifacts 或 Release 附件取。
 
 > 为什么这么小：零第三方依赖，没有 androidx、没有 okhttp，图标是矢量 XML。
 > 作为对比，一个空的 Hello World + AndroidX 通常就要 1~2 MB。
+
+本机实测用官方 `apksigner` 校验过：
+
+```
+apksigner verify --print-certs app-debug.apk   → 退出码 0，签名有效
+package: name='com.printinbox.relay' versionCode='1' versionName='1.0'
+sdkVersion:'21'          ← 最低 Android 5.0
+targetSdkVersion:'34'
+uses-permission: INTERNET
+uses-permission: WRITE_EXTERNAL_STORAGE maxSdkVersion='28'
+application-label:'打印中转'
+```
 
 ---
 
@@ -170,7 +199,7 @@ Android 8 起是**按来源**授权的：你用哪个 APP 打开的 APK，就要
 | 「与已装应用冲突」 | 之前装过同名不同签名的版本 | 先卸载旧的 |
 | 装完桌面没图标 | 图标进了抽屉 | 应用列表里找「打印中转」；现补的自适应图标缺失问题只影响图标显示，不影响运行 |
 | 装完分享列表里没有它 | 系统要重建 intent 索引 | 重启一次手机，一般就出现了 |
-| 提示应用未通过安全检测 | 未知来源 + 调试签名 | 继续安装即可；介意就用 §2.2 自己签 |
+| 提示应用未通过安全检测 | 未知来源 + 调试签名 | 继续安装即可；介意就用 §2.3 自己生成 keystore 签 |
 
 ### 7.3 装完之后
 
@@ -184,8 +213,10 @@ Android 8 起是**按来源**授权的：你用哪个 APP 打开的 APK，就要
 
 ## 8. 一句话总结
 
-- **能不能出 APK**：能，工程完备，云端三条命令出包。
-- **本机为什么不行**：没装 JDK 17 / Android SDK / Gradle，仓库也没带 `gradlew` 二进制。
-- **最低能装的手机**：Android 5.0（API 21）。
+- **能不能出 APK**：能。云端三条命令、本机一条 `python tools/build_apk.py`，两条路都已实测跑通。
+- **最低能装的手机**：Android 5.0（API 21），实测产物 20 KB。
 - **要不要签名**：自用不需要，debug 包直接装；要长期升级就跑一次 `make-keystore.bat`。
-- **本次补了什么**：release 签名配置 + 无密钥自动回落、`.gitignore` 加签名与构建产物、`make-keystore.bat`、`signing.example.properties`、云端工作流同时出两个包。
+- **三个曾经让人白忙的点**：
+  1. release 没有签名配置 → 产出装不上的 unsigned 包（已加自动回落）
+  2. 中文用户名路径 → AGP 直接拒绝构建（脚本会把工程复制到 ASCII 目录）
+  3. `gradle wrapper` 只有 properties 没有 jar → `./gradlew` 不可用（云端和脚本都改用系统 Gradle）

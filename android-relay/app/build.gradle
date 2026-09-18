@@ -8,17 +8,24 @@ plugins {
 // 为什么要绕这一下：AGP 里 signingConfig 为空时，assembleRelease 产出的是
 // app-release-unsigned.apk —— 手机上根本装不了。回落之后，
 // 「任何一个能敲 gradle 的人」都能拿到装得上的包，而不是一份废品。
-def signingPropsFile = rootProject.file("signing.properties")
+//
+// 注意这里全用「方法」而不是顶层 def 变量：Groovy 的方法体访问不到
+// script body 里的 def 局部变量，写成 `def signingPropsFile = ...` 会让
+// loadSigningProps() 报 "Could not get unknown property 'signingPropsFile'"。
+File signingPropsFile() {
+    return rootProject.file("signing.properties")
+}
 
-def loadSigningProps() {
-    if (!signingPropsFile.canRead()) return null
-    def p = new Properties()
-    signingPropsFile.withInputStream { p.load(it) }
+Properties loadSigningProps() {
+    File f = signingPropsFile()
+    if (!f.canRead()) return null
+    Properties p = new Properties()
+    f.withInputStream { p.load(it) }
     return p
 }
 
-def hasSigningProps() {
-    def p = loadSigningProps()
+boolean hasSigningProps() {
+    Properties p = loadSigningProps()
     if (p == null || !p.containsKey("RELEASE_STORE_FILE")) return false
     return rootProject.file(p["RELEASE_STORE_FILE"]).canRead()
 }
@@ -38,12 +45,18 @@ android {
     signingConfigs {
         // release 只在真的配了 keystore 时才创建，别占着一份空签名配置
         if (hasSigningProps()) {
-            def p = loadSigningProps()
+            Properties p = loadSigningProps()
+            // 先在闭包外面把值取出来：闭包里再解 rootProject / p 容易踩解析策略的坑，
+            // 而局部变量是稳稳能被闭包捕获的
+            File ks = rootProject.file(p["RELEASE_STORE_FILE"])
+            String storePass = p["RELEASE_STORE_PASSWORD"]
+            String alias = p["RELEASE_KEY_ALIAS"]
+            String keyPass = p["RELEASE_KEY_PASSWORD"]
             release {
-                storeFile rootProject.file(p["RELEASE_STORE_FILE"])
-                storePassword p["RELEASE_STORE_PASSWORD"]
-                keyAlias p["RELEASE_KEY_ALIAS"]
-                keyPassword p["RELEASE_KEY_PASSWORD"]
+                storeFile ks
+                storePassword storePass
+                keyAlias alias
+                keyPassword keyPass
             }
         }
     }
