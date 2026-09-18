@@ -26,6 +26,16 @@ reflow_compare.png
 Thumbs.db
 desktop.ini
 
+# ---- 安卓签名（本地私有，传上去等于把发布权交出去）----
+*.jks
+*.keystore
+android-relay/signing.properties
+
+# ---- Gradle 构建产物 ----
+android-relay/app/build/
+android-relay/.gradle/
+android-relay/local.properties
+
 # ---- 编辑器 / 系统 ----
 .idea/
 .vscode/

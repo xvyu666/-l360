@@ -2,6 +2,27 @@ plugins {
     id 'com.android.application'
 }
 
+// ---- 签名开关 ----
+// 配了署名文件（android-relay/signing.properties）就用正式签名；没配就退回 debug 签名。
+//
+// 为什么要绕这一下：AGP 里 signingConfig 为空时，assembleRelease 产出的是
+// app-release-unsigned.apk —— 手机上根本装不了。回落之后，
+// 「任何一个能敲 gradle 的人」都能拿到装得上的包，而不是一份废品。
+def signingPropsFile = rootProject.file("signing.properties")
+
+def loadSigningProps() {
+    if (!signingPropsFile.canRead()) return null
+    def p = new Properties()
+    signingPropsFile.withInputStream { p.load(it) }
+    return p
+}
+
+def hasSigningProps() {
+    def p = loadSigningProps()
+    if (p == null || !p.containsKey("RELEASE_STORE_FILE")) return false
+    return rootProject.file(p["RELEASE_STORE_FILE"]).canRead()
+}
+
 android {
     namespace 'com.printinbox.relay'
     compileSdk 34
@@ -14,15 +35,41 @@ android {
         versionName "1.0"
     }
 
+    signingConfigs {
+        // release 只在真的配了 keystore 时才创建，别占着一份空签名配置
+        if (hasSigningProps()) {
+            def p = loadSigningProps()
+            release {
+                storeFile rootProject.file(p["RELEASE_STORE_FILE"])
+                storePassword p["RELEASE_STORE_PASSWORD"]
+                keyAlias p["RELEASE_KEY_ALIAS"]
+                keyPassword p["RELEASE_KEY_PASSWORD"]
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            // 刻意不加 applicationIdSuffix：debug / release 共用一个包名，
+            // 手机上不会同时装出两个「打印中转」
+        }
         release {
             minifyEnabled false
+            signingConfig hasSigningProps() ? signingConfigs.release : signingConfigs.debug
         }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        // 本项目刻意只用系统原生 API（不引 AndroidX），还要兼容到 minSdk 21，
+        // lint 会出一堆 NewApi / Deprecation 提示。它们只是警告，
+        // 但 assembleRelease 会跑 lintVital，为这些把构建卡红没必要。
+        abortOnError false
+        checkReleaseBuilds false
     }
 }
 

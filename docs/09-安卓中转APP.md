@@ -63,7 +63,7 @@ android-relay/
 git tag v1.0.0 && git push origin v1.0.0
 ```
 
-Actions 会自动编译，产物直接挂在 Release 附件里（`app-debug.apk`，约 100KB）。
+Actions 会自动编译，产物直接挂在 Release 附件里：`app-debug.apk` 和 `app-release.apk`（各约 100KB）。
 也可以不打 tag：Actions 页手动 `Run workflow`，从 Artifacts 下载。
 
 **B. 本地 Android Studio**
@@ -72,7 +72,13 @@ Actions 会自动编译，产物直接挂在 Release 附件里（`app-debug.apk`
 2. **Open** 打开 `android-relay/` 目录（子目录，不是仓库根），等同步完
 3. **Build → Build APK(s)**，产物在 `app/build/outputs/apk/debug/app-debug.apk`
 
-想要 release 签名包：`Build → Generate Signed Bundle/APK`，按向导生成 keystore。
+仓库里没有 gradlew（只有 `gradle-wrapper.properties`），Studio 打开时会自动补齐；
+不想开 IDE 就用系统 Gradle：`gradle -p android-relay assembleDebug`（需 JDK 17 + Android SDK）。
+
+> **签名**：仓库不含私钥，但没有 keystore 时 `assembleRelease` 会自动回落到 debug 签名，
+> 所以两个包都是能直接装到手机上的。想用自己的签名就跑一次 `make-keystore.bat`。
+> 完整的构建命令、产物路径、最低 Android 版本（5.0）和装机授权步骤见
+> **[11-APK构建与安装](11-APK构建与安装.md)**。
 
 > 装到手机上的具体授权步骤（各品牌的「允许安装未知应用」入口、常见报错、
 > 首次填写电脑地址）见 **[10-手机端安装](10-手机端安装.md)**。

@@ -52,15 +52,19 @@ jobs:
           sudo ln -sfn /opt/gradle-8.7/bin/gradle /usr/local/bin/gradle
           gradle --version | head -3
 
-      - name: 编译 Debug APK
-        run: gradle -p android-relay assembleDebug --no-daemon
+      # debug：公共调试签名，落到手机上直接能装，自用首选
+      # release：没有 keystore 时会自动回落到 debug 签名（见 app/build.gradle），
+      #          所以这一步在没有密钥的云端也一定成功
+      - name: 编译 APK
+        run: gradle -p android-relay assembleDebug assembleRelease --no-daemon
 
-      # debug 包用公共调试签名，装到手机上不需要额外签名步骤
       - name: 上传 APK 为构建产物
         uses: actions/upload-artifact@v4
         with:
           name: 打印中转-APK
-          path: android-relay/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android-relay/app/build/outputs/apk/debug/app-debug.apk
+            android-relay/app/build/outputs/apk/release/app-release.apk
           retention-days: 90
 
       # 只在打 tag 时才挂 Release，PR 触发时跳过
@@ -68,6 +72,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: android-relay/app/build/outputs/apk/debug/app-debug.apk
+          name: "打印中转 v${{ github.ref_name }}"
+          body: |
+            手机上安装 `app-debug.apk` 即可（约 100KB，Android 5.0+ 通用）。
+            两个包内容一致，区别只在签名：
+            - `app-debug.apk` —— 公共调试签名，直接装，自用推荐
+            - `app-release.apk` —— 正式构建；本仓库不含私钥，实际也用调试签名顶上
+
+            安装步骤与「未知来源」授权见 docs/10-手机端安装.md。
+          files: |
+            android-relay/app/build/outputs/apk/debug/app-debug.apk
+            android-relay/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
