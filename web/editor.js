@@ -688,10 +688,158 @@ function EDbuildSpec() {
     options: Object.assign({}, ED.opts, {
       orientation: ED.orientation,
       layout: 'fill',
+      copies: Math.max(1, Math.min(99, +(ED.opts.copies || 1))),
     }),
+    // /api/compose 认的是 body 顶层的 printer，不是 options 里的
+    printer: ED.opts.printer || '',
   };
 }
-async function EDprint() {
+/* 排完版不直接打。中间必须隔一层「打印选项」，用户要能在真正出纸前
+   改打印机 / 纸张 / 方向 / 颜色 / 清晰度 / 份数，并且先看一眼成品。
+   之前是直接 /api/compose 一把梭，纸打出来才发现选错了。 */
+const EDPO = { open: false, busy: false, objUrl: null, prevIdx: -1 };
+
+function EDcount() {
+  return ED.pages.reduce((a, p) => a + p.items.length, 0);
+}
+async function EDnextStep() {
+  const cnt = EDcount();
+  if (!cnt) { toast('版面里还没有图'); return; }
+  await EDpoLoadOpts();
+  EDpoSync();
+  $E('#edPoMask').classList.add('show');
+  EDPO.open = true;
+  EDpoHidePrev();
+}
+function EDpoClose() {
+  $E('#edPoMask').classList.remove('show');
+  EDPO.open = false;
+}
+function EDpoHidePrev() {
+  $E('#edPoPrevWrap').hidden = true;
+  $E('#edPoPrevImg').removeAttribute('src');
+}
+
+/* 打印机与纸张下拉：纸张用主页已经拉好的 S.papers，打印机单独取一次 */
+async function EDpoLoadOpts() {
+  const selP = $E('#edPoPaper');
+  const list = (window.S && S.papers) || [];
+  if (selP.dataset.filled !== '1') {
+    selP.innerHTML = list.map(p => `<option value="${p.key}">${p.label}</option>`).join('');
+    if (!list.length) selP.innerHTML = `<option value="A4">A4</option>`;
+    selP.dataset.filled = '1';
+  }
+  const selPr = $E('#edPoPrinter');
+  if (selPr.dataset.filled !== '1') {
+    let names = [];
+    try {
+      const r = await fetch('/api/info').then(x => x.json());
+      names = r.printers || (r.printer ? [r.printer] : []);
+    } catch (e) { }
+    selPr.innerHTML = names.length
+      ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+      : `<option value="">（默认打印机）</option>`;
+    selPr.dataset.filled = '1';
+    if (names.length && !ED.opts.printer) ED.opts.printer = names[0];
+  }
+}
+
+function EDpoSync() {
+  const o = ED.opts;
+  if (!o.paper) o.paper = 'A4';
+  if (!o.copies) o.copies = 1;
+  $E('#edPoPaper').value = o.paper;
+  if ($E('#edPoPrinter').querySelector(`option[value="${o.printer || ''}"]`)) {
+    $E('#edPoPrinter').value = o.printer || '';
+  }
+  EDpoMarkSeg('#edPoOri', ED.orientation === 'landscape' ? 'landscape' : 'portrait');
+  EDpoMarkSeg('#edPoColor', o.color === 'mono' ? 'mono' : 'color');
+  EDpoMarkSeg('#edPoQual', QUAL_OK(o.quality) || 'standard');
+  $E('#edPoCopies').textContent = o.copies;
+  EDpoSummary();
+}
+function QUAL_OK(q) { return ['draft', 'standard', 'high'].indexOf(q) >= 0 ? q : null; }
+function EDpoMarkSeg(sel, v) {
+  $E(sel).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+function EDpoSummary() {
+  const pages = ED.pages.length, cnt = EDcount();
+  const cp = Math.max(1, +(ED.opts.copies || 1));
+  const pl = (((window.S && S.papers) || []).find(p => p.key === ED.opts.paper) || {}).label || ED.opts.paper;
+  $E('#edPoSum').innerHTML =
+    `<b>${pages}</b> 页 · ${cnt} 张图 · ${pl} ${ED.orientation === 'landscape' ? '横向' : '竖向'}` +
+    (cp > 1 ? ` · ${cp} 份（共 ${pages * cp} 张纸）` : '');
+}
+
+/* 改选项：纸张 / 方向会改变画布比例，必须重新取画布再排一遍，
+   否则用户在手机上是按 A4 摆的，打出来是另一个比例，位置全歪。 */
+function EDpoOpt(key, v) {
+  const relayout = (key === 'paper' || key === 'orientation');
+  if (key === 'orientation') ED.orientation = v;
+  else ED.opts[key] = v;
+  EDpoSummary();
+  if (relayout) {
+    toast('正在按新尺寸重排…', 1500);
+    EDfetchCanvas().then(() => { EDrelayout(); EDpoSummary(); });
+  } else {
+    EDfetchCanvas().then(() => { EDrender(); });
+  }
+}
+function EDcopies(d) {
+  ED.opts.copies = Math.max(1, Math.min(99, (+(ED.opts.copies) || 1) + d));
+  $E('#edPoCopies').textContent = ED.opts.copies;
+  EDpoSummary();
+}
+
+async function EDpoPreview() {
+  if (EDPO.busy) return;
+  const cnt = EDcount();
+  if (!cnt) { toast('版面里还没有图'); return; }
+  EDPO.busy = true;
+  $E('#edPoPrevWrap').hidden = false;
+  $E('#edPoPrevTxt').textContent = '正在合成这一页…';
+  try {
+    const spec = EDbuildSpec();
+    const idx = Math.max(0, Math.min(ED.p, spec.pages.length - 1));
+    const r = await fetch('/api/compose-preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages: spec.pages, options: spec.options, index: idx, edge: 1200 }),
+    });
+    if (!r.ok) {
+      let msg = '预览没出来（' + r.status + '）';
+      try { const j = await r.json(); if (j.error) msg = j.error; } catch (e) { }
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    if (EDPO.objUrl) URL.revokeObjectURL(EDPO.objUrl);
+    EDPO.objUrl = URL.createObjectURL(blob);
+    $E('#edPoPrevImg').src = EDPO.objUrl;
+    EDPO.prevIdx = idx;
+    $E('#edPoPrevTxt').textContent = `第 ${idx + 1}/${spec.pages.length} 页 · 这张就是拿到纸上的样子`;
+  } catch (e) {
+    $E('#edPoPrevWrap').hidden = true;
+    toast('❌ ' + e.message, 3000);
+  } finally {
+    EDPO.busy = false;
+  }
+}
+
+async function EDpoConfirm() {
+  EDpoClose();
+  await EDprintConfirm();
+  // 顺手把这次选的同步回主页的打印选项，出去后看到的就是同一套设置
+  try {
+    if (window.S && S.opts) {
+      Object.assign(S.opts, {
+        paper: ED.opts.paper, color: ED.opts.color, quality: ED.opts.quality,
+        copies: ED.opts.copies, orientation: ED.orientation,
+      });
+      if (typeof syncSummary === 'function') syncSummary();
+    }
+  } catch (e) { }
+}
+
+async function EDprintConfirm() {
   const total = ED.pages.length;
   const cnt = ED.pages.reduce((a, p) => a + p.items.length, 0);
   if (!cnt) { toast('版面里还没有图'); return; }
@@ -719,5 +867,20 @@ async function EDprint() {
     stage.addEventListener('pointerup', EDstageUp);
     stage.addEventListener('pointercancel', EDstageUp);
     window.addEventListener('resize', () => { if (ED.open) EDrepaintSel(); });
+
+    // 「下一步」面板里的分段按钮：这些 .seg 故意没写 data-key，
+    // 免得被主页那段统一代理抢去改了 S.opts 而不是 ED.opts。
+    document.querySelectorAll('#edPoMask .seg').forEach(seg => {
+      seg.addEventListener('click', ev => {
+        const b = ev.target.closest('button'); if (!b) return;
+        seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        EDpoOpt(seg.dataset.ed, b.dataset.v);
+      });
+    });
+    const paper = $E('#edPoPaper');
+    if (paper) paper.addEventListener('change', () => EDpoOpt('paper', paper.value));
+    const prn = $E('#edPoPrinter');
+    if (prn) prn.addEventListener('change', () => { ED.opts.printer = prn.value; });
   });
 })();

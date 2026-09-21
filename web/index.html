@@ -573,7 +573,68 @@ textarea{
     <div class="edpanel" id="edPanel"></div>
     <div class="row2" style="gap:8px">
       <div class="btn ghost" onclick="EDrelayout()">重新排版</div>
-      <button class="btn primary" onclick="EDprint()">打印 <span id="edPages"></span></button>
+      <button class="btn primary" onclick="EDnextStep()">下一步 <span id="edPages"></span></button>
+    </div>
+  </div>
+</div>
+
+<!-- 排版完的「下一步」：先看一眼再决定怎么打 -->
+<div class="mask" id="edPoMask">
+  <div class="sheet" style="max-height:92vh">
+    <h2 style="text-align:center">打印选项</h2>
+    <div class="hint" id="edPoSum" style="text-align:center;margin:-2px 0 12px"></div>
+
+    <div class="grp">
+      <label>打印机</label>
+      <select id="edPoPrinter" data-ed="printer"></select>
+      <div class="hint" id="edPoPrHint">默认用当前这台。有多台打印机时在这里换。</div>
+    </div>
+    <div class="grp">
+      <label>纸张大小</label>
+      <select id="edPoPaper" data-ed="paper"></select>
+      <div class="hint">换了纸会按新比例重新排一遍。</div>
+    </div>
+    <div class="grp">
+      <label>方向</label>
+      <div class="seg" id="edPoOri" data-ed="orientation">
+        <button data-v="portrait">竖向</button>
+        <button data-v="landscape">横向</button>
+      </div>
+    </div>
+    <div class="grp">
+      <label>颜色</label>
+      <div class="seg" id="edPoColor" data-ed="color">
+        <button data-v="color">彩色</button>
+        <button data-v="mono">黑白（省墨）</button>
+      </div>
+    </div>
+    <div class="grp">
+      <label>清晰度</label>
+      <div class="seg" id="edPoQual" data-ed="quality">
+        <button data-v="draft">草稿</button>
+        <button data-v="standard">标准</button>
+        <button data-v="high">高质量</button>
+      </div>
+      <div class="hint">草稿够看清且省墨；要留下存档或贴出去选「高质量」。</div>
+    </div>
+    <div class="grp">
+      <label>份数</label>
+      <div class="stepper">
+        <button class="cbtn" onclick="EDcopies(-1)">−</button>
+        <span class="n" id="edPoCopies">1</span>
+        <button class="cbtn" onclick="EDcopies(1)">＋</button>
+      </div>
+    </div>
+
+    <div id="edPoPrevWrap" hidden style="margin:12px 0 4px;text-align:center">
+      <img id="edPoPrevImg" alt="" style="max-width:100%;max-height:38vh;border-radius:6px;box-shadow:0 2px 10px rgba(16,24,40,.15)">
+      <div class="hint" id="edPoPrevTxt" style="margin-top:6px"></div>
+    </div>
+    <button class="btn ghost wide" onclick="EDpoPreview()">看成品效果</button>
+
+    <div class="row2" style="margin-top:10px">
+      <button class="btn ghost" onclick="EDpoClose()">回去改</button>
+      <button class="btn primary" onclick="EDpoConfirm()">打 印</button>
     </div>
   </div>
 </div>

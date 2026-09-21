@@ -832,6 +832,61 @@ class Handler(BaseHTTPRequestHandler):
                 th.start()
                 return self._json({"taskId": tid})
 
+            if path == "/api/compose-preview":
+                # 排版编辑器的「打印预览」：只合成画面，不碰打印机。
+                # 关键点是它走的是和真正打印完全同一个 LY.compose_pages，
+                # 所以屏幕上看到的这页，就是把要从打印机出来那页。
+                data = json.loads(self._body().decode("utf-8") or "{}")
+                pages_spec = data.get("pages") or []
+                if not pages_spec:
+                    return self._json({"error": "版面是空的"}, 400)
+                idx = int(data.get("index") or 0)
+                idx = max(0, min(idx, len(pages_spec) - 1))
+                options = data.get("options") or {}
+                edge = 1100
+                try:
+                    edge = max(400, min(int(data.get("edge") or 1100), 2000))
+                except ValueError:
+                    pass
+                printer = (options.get("printer")
+                           or _config.get("printer")
+                           or PC.default_printer())
+                paper = options.get("paper", PC.DEFAULT_PAPER)
+                if paper not in PC.PAPERS:
+                    paper = PC.DEFAULT_PAPER
+                gray = options.get("color", "color") == "mono"
+                ori_s = options.get("orientation", "portrait")
+                ori = PC.DMORIENT_LANDSCAPE if ori_s == "landscape" else PC.DMORIENT_PORTRAIT
+                _cp, canvas_mm = canvas_for(printer, paper, ori, 300)
+                long_inch = max(canvas_mm) / RD.MM_PER_INCH
+                prev_dpi = max(40.0, min(edge / long_inch, 200.0))
+                view_px = (max(2, int(round(canvas_mm[0] / RD.MM_PER_INCH * prev_dpi))),
+                           max(2, int(round(canvas_mm[1] / RD.MM_PER_INCH * prev_dpi))))
+
+                def _cp_resolver(jid):
+                    with _lock:
+                        job = _jobs.get(jid)
+                    return source_of(job) if job else None
+
+                try:
+                    imgs = LY.compose_pages(_cp_resolver, [pages_spec[idx]],
+                                            view_px, gray, log_fn=log)
+                except Exception as e:
+                    log("compose-preview failed: %s\n%s" % (e, traceback.format_exc()))
+                    return self._json({"error": str(e)}, 500)
+                try:
+                    if not imgs:
+                        return self._json({"error": "这一页没有内容"}, 400)
+                    buf = io.BytesIO()
+                    imgs[0].convert("RGB").save(buf, "JPEG", quality=80)
+                    return self._bytes(buf.getvalue(), "image/jpeg")
+                finally:
+                    for p in imgs:
+                        try:
+                            p.close()
+                        except Exception:
+                            pass
+
             if path == "/api/testpage":
                 printer = _config.get("printer") or PC.default_printer()
                 tid = uuid.uuid4().hex[:12]
@@ -1444,12 +1499,17 @@ def supported_features():
         少了 "inbox" → 进程是旧的，重启一下就好，代码没毛病。
     """
     try:
-        import inspect
-        src = inspect.getsource(Handler)
+        # 显式按 UTF-8 读自己的源码文件。之前用 inspect.getsource(Handler)，
+        # 它靠 linecache 猜编码，中文注释一多就有概率抛 UnicodeDecodeError
+        # （0xb3 这种 GBK 字节），结果整份 features 直接查不出来。
+        with open(os.path.abspath(__file__), "r", encoding="utf-8", errors="replace") as f:
+            src = f.read()
     except Exception:
         return []
-    names = ("inbox", "notes", "wechat")
-    return [n for n in names if "/api/%s/" % n in src]
+    # 用 "/api/" + 名字 做前缀匹配，别加尾巴的斜杠：
+    # compose-preview 这类单个路由后面是没有斜杠的。
+    names = ("inbox", "notes", "wechat", "compose-preview")
+    return [n for n in names if ("/api/%s" % n) in src]
 
 
 if __name__ == "__main__":

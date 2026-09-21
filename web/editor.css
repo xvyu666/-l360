@@ -1,4 +1,8 @@
 /* 截图排版编辑器 ---------------------------------------------- */
+/* 「下一步」的打印选项层：.edwrap 是 z-index 60，
+   而通用弹层 .mask 只有 50 —— 不抬上去会被编辑器整个盖住。 */
+#edPoMask{z-index:70}
+#edPoMask .sheet{max-height:92vh;overflow:auto;-webkit-overflow-scrolling:touch}
 .edwrap{
   position:fixed;inset:0;z-index:60;background:var(--bg);
   display:flex;flex-direction:column;overscroll-behavior:contain;

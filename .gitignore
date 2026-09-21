@@ -10,6 +10,9 @@ venv/
 runtime/jobs/
 runtime/*.log
 runtime/config.json
+runtime/inbox/
+runtime/notes/
+runtime/cache/
 
 # 10MB 的嵌入式 Python，用 tools/fetch_pyembed.py 现下
 runtime/pyembed.zip

@@ -66,7 +66,8 @@
 | `/api/text` | 随手记文本 → 作业 |
 | `/api/upload` | 上传文件（文件名走 `X-File-Name` 头，支持中文） |
 | `/api/print` | 提交打印任务，返回 `taskId` |
-| `/api/compose` | 提交拼版打印任务 |
+| `/api/compose` | 提交拼版打印任务（`printer` 是 body 顶层字段，不是在 `options` 里） |
+| `/api/compose-preview` | 合成某一页返回 JPEG，只画不出纸；body=`{pages, options, index, edge}` |
 | `/api/testpage` | 打一张测试页 |
 | `/api/wechat/import` | 把选中的微信文件复制成作业 |
 | `/api/inbox/upload` | 安卓中转 APP 上传：body=文件字节，`X-File-Name` 头带文件名 |

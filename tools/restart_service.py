@@ -31,7 +31,7 @@ TARGET_PORT = 8760
 SERVER_PY = os.path.join(ROOT, "server.py")
 
 # 最新一版代码该支持的功能，用来判断跑着的进程是不是旧的
-WANT_FEATURES = ["inbox", "notes", "wechat"]
+WANT_FEATURES = ["inbox", "notes", "wechat", "compose-preview"]
 
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
