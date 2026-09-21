@@ -625,6 +625,15 @@ textarea{
         <button class="cbtn" onclick="EDcopies(1)">＋</button>
       </div>
     </div>
+    <div class="grp">
+      <label>双面（手动）</label>
+      <div class="seg" id="edPoDuplex" data-ed="duplex">
+        <button data-v="off" class="on">关</button>
+        <button data-v="long">长边翻转</button>
+        <button data-v="short">短边翻转</button>
+      </div>
+      <div class="hint" id="edPoDupHint">和主页那套一样：先打奇数页，提示你翻面后再打偶数页。只有 1 页时不会拆。</div>
+    </div>
 
     <div id="edPoPrevWrap" hidden style="margin:12px 0 4px;text-align:center">
       <img id="edPoPrevImg" alt="" style="max-width:100%;max-height:38vh;border-radius:6px;box-shadow:0 2px 10px rgba(16,24,40,.15)">

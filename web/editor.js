@@ -689,6 +689,9 @@ function EDbuildSpec() {
       orientation: ED.orientation,
       layout: 'fill',
       copies: Math.max(1, Math.min(99, +(ED.opts.copies || 1))),
+      // 服务端 run_compose_task 认 options.duplex；不显式带上时，
+      // 主页那套 duplex 恰好也可能被 Object.assign 带进来，但值可能不合法
+      duplex: DUPLEX_OK(ED.opts.duplex) || 'off',
     }),
     // /api/compose 认的是 body 顶层的 printer，不是 options 里的
     printer: ED.opts.printer || '',
@@ -755,10 +758,17 @@ function EDpoSync() {
   EDpoMarkSeg('#edPoOri', ED.orientation === 'landscape' ? 'landscape' : 'portrait');
   EDpoMarkSeg('#edPoColor', o.color === 'mono' ? 'mono' : 'color');
   EDpoMarkSeg('#edPoQual', QUAL_OK(o.quality) || 'standard');
+  EDpoMarkSeg('#edPoDuplex', DUPLEX_OK(o.duplex) || 'off');
   $E('#edPoCopies').textContent = o.copies;
   EDpoSummary();
 }
 function QUAL_OK(q) { return ['draft', 'standard', 'high'].indexOf(q) >= 0 ? q : null; }
+/* 双面取值和主页 index.html 里的 seg 完全一致：off / long / short */
+function DUPLEX_OK(d) { return ['off', 'long', 'short'].indexOf(d) >= 0 ? d : null; }
+const DUP_LABEL = { long: '双面·长边翻转', short: '双面·短边翻转' };
+function EDduplexOn() {
+  return ED.opts.duplex && ED.opts.duplex !== 'off' && ED.pages.length > 1;
+}
 function EDpoMarkSeg(sel, v) {
   $E(sel).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
 }
@@ -766,9 +776,13 @@ function EDpoSummary() {
   const pages = ED.pages.length, cnt = EDcount();
   const cp = Math.max(1, +(ED.opts.copies || 1));
   const pl = (((window.S && S.papers) || []).find(p => p.key === ED.opts.paper) || {}).label || ED.opts.paper;
+  const dup = EDduplexOn();
+  // 双面时一张纸承两页，所以是 ceil 而不是乘
+  const per = dup ? Math.ceil(pages / 2) : pages;
   $E('#edPoSum').innerHTML =
     `<b>${pages}</b> 页 · ${cnt} 张图 · ${pl} ${ED.orientation === 'landscape' ? '横向' : '竖向'}` +
-    (cp > 1 ? ` · ${cp} 份（共 ${pages * cp} 张纸）` : '');
+    (dup ? ` · ${DUP_LABEL[ED.opts.duplex]}` : '') +
+    ` · 共 ${per * cp} 张纸` + (cp > 1 ? `（${cp} 份）` : '');
 }
 
 /* 改选项：纸张 / 方向会改变画布比例，必须重新取画布再排一遍，
@@ -833,25 +847,68 @@ async function EDpoConfirm() {
       Object.assign(S.opts, {
         paper: ED.opts.paper, color: ED.opts.color, quality: ED.opts.quality,
         copies: ED.opts.copies, orientation: ED.orientation,
+        duplex: DUPLEX_OK(ED.opts.duplex) || 'off',
       });
       if (typeof syncSummary === 'function') syncSummary();
     }
   } catch (e) { }
 }
 
+/* 发一次排版打印。phase 就是手动双面的那一轮：all / odd / even */
+async function EDcompose(phase) {
+  const spec = EDbuildSpec();
+  spec.options = Object.assign({}, spec.options, { phase: phase || 'all' });
+  return fetch('/api/compose', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(spec),
+  }).then(x => x.json());
+}
+
 async function EDprintConfirm() {
   const total = ED.pages.length;
   const cnt = ED.pages.reduce((a, p) => a + p.items.length, 0);
   if (!cnt) { toast('版面里还没有图'); return; }
-  showProgress('正在排版打印', `共 ${total} 页 / ${cnt} 张，正在合成…`, 0);
+  // 手动双面：第一轮只打奇数页，停下来等翻面，第二轮才打偶数页。
+  // 和主页 runPrint 的做法一致 —— 不能一口气把 all 发过去，否则纸全出完了才提示翻面。
+  const duplex = EDduplexOn();
+  const first = duplex ? 'odd' : 'all';
+  showProgress('正在排版打印',
+    duplex ? `共 ${total} 页，先打奇数页…` : `共 ${total} 页 / ${cnt} 张，正在合成…`, 0);
   try {
-    const r = await fetch('/api/compose', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(EDbuildSpec()),
-    }).then(x => x.json());
+    const r = await EDcompose(first);
     if (r.error) throw new Error(r.error);
     const ok = await poll(r.taskId);
-    if (ok) doneProgress(true, `✅ 已打印 ${total} 页`);
+    if (!ok) return;
+    if (duplex) { EDwaitFlip(); return; }
+    doneProgress(true, `✅ 已打印 ${total} 页`);
+  } catch (e) {
+    doneProgress(false, '❌ ' + e.message);
+  }
+}
+
+function EDwaitFlip() {
+  $E('#spin').classList.add('hidden');
+  $E('#progTitle').textContent = '请把纸翻面';
+  $E('#progMsg').innerHTML =
+    '奇数页已经打完。<br>把出纸的那叠纸<b>整体翻面</b>放回进纸器，再点下面打偶数页。' +
+    (ED.opts.duplex === 'short' ? '<br><small>这次是短边翻转，翻的方向跟长边不一样，注意别翻错。</small>' : '');
+  $E('#bar').style.width = '100%';
+  $E('#progAfter').classList.remove('hidden');
+  $E('#progAfter').innerHTML =
+    `<button class="btn primary wide" onclick="EDcontinueEven()">继续打印偶数页</button>
+     <button class="btn ghost wide" style="margin-top:10px" onclick="closeProgress()">先这样，算了</button>`;
+}
+
+async function EDcontinueEven() {
+  closeProgress();
+  const total = ED.pages.length;
+  showProgress('正在打印偶数页', '准备中…', 0);
+  try {
+    const r = await EDcompose('even');
+    if (r.error) throw new Error(r.error);
+    if (await poll(r.taskId)) {
+      doneProgress(true, `✅ 双面完成，共 ${total} 页`);
+    }
   } catch (e) {
     doneProgress(false, '❌ ' + e.message);
   }

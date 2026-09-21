@@ -337,15 +337,21 @@ def apply_margins(page_img, canvas_px, margin, dpi, reflow: bool = False):
 
 
 def filter_pages(n, duplex, phase):
-    """手动双面：按奇偶拆成两轮。"""
+    """手动双面：按奇偶拆成两轮。
+
+    phase 必须是 odd / even。给了别的值（比如 all）就整份返回——
+    原来这里写成「不是 odd 就返回偶数页」，一旦调用方漏传 phase，
+    只会静默打一半，打到纸上才发现。宁可不拆，也不能悄悄少打。
+    """
     seq = list(range(1, n + 1))
     if duplex == "off":
         return seq
-    odd = [p for p in seq if p % 2 == 1]
-    even = [p for p in seq if p % 2 == 0]
-    if duplex == "short":
-        even = list(reversed(even))
-    return odd if phase == "odd" else even
+    if phase == "odd":
+        return [p for p in seq if p % 2 == 1]
+    if phase == "even":
+        even = [p for p in seq if p % 2 == 0]
+        return list(reversed(even)) if duplex == "short" else even
+    return seq
 
 
 # ---------------------------------------------------------------- 原格式直印
@@ -553,6 +559,20 @@ def run_compose_task(task_id: str, pages_spec: list, options: dict, printer: str
         copies = max(1, min(int(options.get("copies", 1)), 99))
         ori_s = options.get("orientation", "portrait")
         ori = PC.DMORIENT_LANDSCAPE if ori_s == "landscape" else PC.DMORIENT_PORTRAIT
+
+        # 手动双面：前端分两轮发（先 phase=odd，等你翻面再 phase=even）。
+        # 这里用和 /api/print 同一个 filter_pages，两边拆页规则才一致。
+        # 放在取画布之前：这一轮没页可打时直接短路，不必先去问打印机要尺寸。
+        duplex = options.get("duplex", "off")
+        phase = options.get("phase", "all")
+        seq_idx = filter_pages(len(pages_spec), duplex, phase)
+        if not seq_idx:
+            task["error"] = "这个阶段没有要打印的页面"
+            task["state"] = "error"
+            return
+        # 先落 total：进度条用它，排查「这轮到底打了几页」也看它
+        task["total"] = len(seq_idx) * copies
+
         canvas_px, _canvas_mm = canvas_for(printer, paper, ori, dpi)
         title = "手机排版打印 %s" % datetime.now().strftime("%H:%M")
 
@@ -561,13 +581,13 @@ def run_compose_task(task_id: str, pages_spec: list, options: dict, printer: str
                 job = _jobs.get(jid)
             return source_of(job) if job else None
 
-        task["total"] = len(pages_spec) * copies
         task["state"] = "working"
 
         printed = 0
         for _c in range(copies):
             batch = []
-            for spec in pages_spec:
+            for pno in seq_idx:
+                spec = pages_spec[pno - 1]
                 pages = LY.compose_pages(resolver, [spec], canvas_px, gray, log_fn=log)
                 batch.extend(pages)
                 if len(batch) >= 6:
@@ -587,8 +607,8 @@ def run_compose_task(task_id: str, pages_spec: list, options: dict, printer: str
         task["pages"] = printed
         task["done"] = printed
         task["state"] = "done"
-        log("compose printed ok: task=%s pages=%d paper=%s ori=%s" %
-            (task_id, printed, paper, ori_s))
+        log("compose printed ok: task=%s pages=%d paper=%s ori=%s duplex=%s phase=%s" %
+            (task_id, printed, paper, ori_s, duplex, phase))
     except Exception as e:
         task["state"] = "error"
         task["error"] = str(e)
